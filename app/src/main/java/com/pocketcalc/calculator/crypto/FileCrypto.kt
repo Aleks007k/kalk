@@ -73,4 +73,16 @@ object FileCrypto {
             decrypting.copyTo(plaintext, bufferSize = 64 * 1024)
         }
     }
+
+    /**
+     * Поток, из которого читаются расшифрованные байты по мере чтения.
+     * Нужен для просмотра (фото/видео/PDF) без расшифровки всего файла на диск.
+     * Закрывает [ciphertext] вызывающий (через закрытие возвращённого потока).
+     */
+    fun decryptingStream(ciphertext: InputStream, key32: ByteArray, associatedData: ByteArray): InputStream =
+        primitive(key32).newDecryptingStream(ciphertext, associatedData)
+
+    /** Поток, в который пишутся данные для шифрования на лету. */
+    fun encryptingStream(ciphertext: OutputStream, key32: ByteArray, associatedData: ByteArray): OutputStream =
+        primitive(key32).newEncryptingStream(ciphertext, associatedData)
 }
