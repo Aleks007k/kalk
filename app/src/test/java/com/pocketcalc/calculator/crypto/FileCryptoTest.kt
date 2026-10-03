@@ -72,6 +72,42 @@ class FileCryptoTest {
         assertThrows { dec(cut) }
     }
 
+    @Test fun segmentBoundarySizes() {
+        // Размеры ровно на границе куска 1 МБ и рядом — классический источник ошибок.
+        val oneMb = 1024 * 1024
+        for (size in listOf(oneMb - 1, oneMb, oneMb + 1, 2 * oneMb, 2 * oneMb + 1)) {
+            val data = ByteArray(size) { (it % 253).toByte() }
+            assertArrayEquals("size=$size", data, dec(enc(data)))
+        }
+    }
+
+    @Test fun ciphertextIsRandomized() {
+        // Два шифрования одних данных дают разный шифртекст (случайный nonce),
+        // но оба расшифровываются верно.
+        val data = "одно и то же".toByteArray()
+        val a = enc(data)
+        val b = enc(data)
+        assertFalse(a.contentEquals(b))
+        assertArrayEquals(data, dec(a))
+        assertArrayEquals(data, dec(b))
+    }
+
+    @Test fun emptyAssociatedDataRoundTrip() {
+        val data = "данные".toByteArray()
+        val out = ByteArrayOutputStream()
+        FileCrypto.encrypt(ByteArrayInputStream(data), out, key, ByteArray(0))
+        val back = ByteArrayOutputStream()
+        FileCrypto.decrypt(ByteArrayInputStream(out.toByteArray()), back, key, ByteArray(0))
+        assertArrayEquals(data, back.toByteArray())
+    }
+
+    @Test fun firstByteTamperFails() {
+        val data = ByteArray(2000) { (it % 255).toByte() }
+        val ct = enc(data)
+        ct[0] = (ct[0].toInt() xor 0x01).toByte()
+        assertThrows { dec(ct) }
+    }
+
     private fun assertThrows(block: () -> Unit) {
         var threw = false
         try {

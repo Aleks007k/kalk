@@ -118,4 +118,53 @@ class VaultStorageTest {
         val s2 = VaultStorage(dir)
         assertEquals(1, s2.loadIndex(master)!!.entries.size)
     }
+
+    @Test fun emptyBlobRoundTrip() {
+        val (s, _) = newStorage()
+        val id = s.addBlob(master, ByteArrayInputStream(ByteArray(0)), 0)
+        val out = ByteArrayOutputStream()
+        s.openBlob(master, id).use { it.copyTo(out) }
+        assertEquals(0, out.size())
+    }
+
+    @Test fun openNonexistentBlobThrows() {
+        val (s, _) = newStorage()
+        var threw = false
+        try {
+            s.openBlob(master, "doesnotexist").use { it.readBytes() }
+        } catch (e: Exception) {
+            threw = true
+        }
+        assertTrue(threw)
+    }
+
+    @Test fun blobBoundToItsId() {
+        // Blob зашифрован с привязкой к своему id. Переименованный файl не читается.
+        val (s, dir) = newStorage()
+        val data = ByteArray(2000) { (it % 255).toByte() }
+        val id = s.addBlob(master, ByteArrayInputStream(data))
+        val blobs = File(dir, "blobs")
+        val renamed = "ffffffffffffffffffffffffffffffff"
+        File(blobs, id).copyTo(File(blobs, renamed))
+        var threw = false
+        try {
+            s.openBlob(master, renamed).use { it.readBytes() }
+        } catch (e: Exception) {
+            threw = true
+        }
+        assertTrue("blob не должен читаться под чужим id", threw)
+    }
+
+    @Test fun indexReflectsAddAndRemove() {
+        val (s, _) = newStorage()
+        s.saveIndex(master, VaultIndex.empty().add(entry("a", "blobA")))
+        val afterAdd = s.loadIndex(master)!!.add(entry("b", "blobB"))
+        s.saveIndex(master, afterAdd)
+        assertEquals(2, s.loadIndex(master)!!.entries.size)
+        val afterRemove = s.loadIndex(master)!!.remove("a")
+        s.saveIndex(master, afterRemove)
+        val loaded = s.loadIndex(master)!!
+        assertEquals(1, loaded.entries.size)
+        assertNull(loaded.find("a"))
+    }
 }

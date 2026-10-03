@@ -36,4 +36,32 @@ class KeyDerivationTest {
         // Ключ не состоит из одних нулей.
         assertFalse(derive("12345678", salt).all { it == 0.toByte() })
     }
+
+    @Test fun parallelismDeterministic() {
+        val p = KeyDerivation.Params(memoryKiB = 1024, iterations = 1, parallelism = 2)
+        val a = KeyDerivation.deriveKey("12345678".toCharArray(), salt, 32, p)
+        val b = KeyDerivation.deriveKey("12345678".toCharArray(), salt, 32, p)
+        assertTrue(a.contentEquals(b))
+    }
+
+    @Test fun moreIterationsChangeKey() {
+        val p1 = KeyDerivation.Params(1024, 1, 1)
+        val p2 = KeyDerivation.Params(1024, 2, 1)
+        val a = KeyDerivation.deriveKey("12345678".toCharArray(), salt, 32, p1)
+        val b = KeyDerivation.deriveKey("12345678".toCharArray(), salt, 32, p2)
+        assertFalse(a.contentEquals(b))
+    }
+
+    @Test fun moreMemoryChangesKey() {
+        val p1 = KeyDerivation.Params(1024, 1, 1)
+        val p2 = KeyDerivation.Params(2048, 1, 1)
+        val a = KeyDerivation.deriveKey("12345678".toCharArray(), salt, 32, p1)
+        val b = KeyDerivation.deriveKey("12345678".toCharArray(), salt, 32, p2)
+        assertFalse(a.contentEquals(b))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun emptySaltRejected() {
+        KeyDerivation.deriveKey("12345678".toCharArray(), ByteArray(0), 32, fast)
+    }
 }

@@ -2,6 +2,7 @@ package com.pocketcalc.calculator.crypto
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -97,5 +98,35 @@ class VaultKeyManagerTest {
     @Test fun masterKeyIsThirtyTwoBytes() {
         val (_, master) = create("12345678", "1111222233334444", gate())
         assertEquals(32, master.size)
+    }
+
+    @Test fun twoSlotsHaveDifferentMasterKeys() {
+        val (_, m1) = create("12345678", "1111222233334444", gate())
+        val (_, m2) = create("12345678", "1111222233334444", gate())
+        // Одинаковые PIN/код, но мастер-ключи случайны и независимы.
+        assertFalse(m1.contentEquals(m2))
+    }
+
+    @Test fun tamperedRecoveryWrapperDetected() {
+        // Последний байт слота — конец конверта восстановления. Его порча должна
+        // ломать восстановление, но НЕ трогать независимый конверт PIN.
+        val g = gate()
+        val (slot, master) = create("12345678", "1111222233334444", g)
+        val bytes = slot.bytes.copyOf()
+        bytes[bytes.size - 1] = (bytes[bytes.size - 1].toInt() xor 0x01).toByte()
+        val tampered = VaultKeyManager.Slot(bytes)
+        assertNull(VaultKeyManager.openWithRecovery(tampered, "1111222233334444".toCharArray()))
+        assertArrayEquals(master, VaultKeyManager.openWithPin(tampered, "12345678".toCharArray(), g))
+    }
+
+    @Test fun garbageSlotReturnsNull() {
+        val junk = VaultKeyManager.Slot(ByteArray(64) { 0 })
+        assertNull(VaultKeyManager.openWithPin(junk, "12345678".toCharArray(), gate()))
+        assertNull(VaultKeyManager.openWithRecovery(junk, "1111222233334444".toCharArray()))
+    }
+
+    @Test fun emptySlotReturnsNull() {
+        val empty = VaultKeyManager.Slot(ByteArray(0))
+        assertNull(VaultKeyManager.openWithPin(empty, "12345678".toCharArray(), gate()))
     }
 }
