@@ -71,6 +71,17 @@ class VaultStorageTest {
         assertNull(s.loadIndex(master))
     }
 
+    @Test fun storeBlobReportsSizeAndSha256() {
+        val (s, _) = newStorage()
+        val data = ByteArray(1_500_000) { (it % 241).toByte() }
+        val stored = s.storeBlob(master, ByteArrayInputStream(data))
+        val expected = java.security.MessageDigest.getInstance("SHA-256").digest(data)
+            .joinToString("") { "%02x".format(it) }
+        assertEquals(data.size.toLong(), stored.size)
+        assertEquals(expected, stored.sha256)
+        assertTrue(s.blobExists(stored.id))
+    }
+
     @Test fun hasBlobsReflectsContent() {
         val (s, _) = newStorage()
         assertFalse(s.hasBlobs())

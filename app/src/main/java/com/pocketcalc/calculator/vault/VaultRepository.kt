@@ -4,12 +4,35 @@ import com.pocketcalc.calculator.crypto.KeyDerivation
 import com.pocketcalc.calculator.crypto.KeystoreGate
 import com.pocketcalc.calculator.crypto.SoftwareKeystoreGate
 import com.pocketcalc.calculator.crypto.VaultKeyManager
+import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.InputStream
 import java.security.SecureRandom
 import java.util.concurrent.CompletableFuture
 
 /** Ячейка, в которой лежит тайник. Какая из них настоящая — нигде не записано. */
 enum class SlotPos { A, B }
+
+/** Что известно о добавляемом файле. */
+data class ImportMeta(
+    val name: String,
+    val mime: String,
+    /** Ожидаемый размер, если известен. Если прочитано иначе — добавление отменяется. */
+    val size: Long? = null,
+    /** Когда снято (мс с 1970), 0 — неизвестно. */
+    val takenAt: Long = 0,
+    /** Длительность видео в мс, 0 — не видео или неизвестно. */
+    val durationMs: Long = 0,
+)
+
+/** Результат добавления файла. */
+sealed interface ImportResult {
+    /** Файл зашифрован, проверен и записан в оглавление. */
+    data class Added(val entry: VaultEntry) : ImportResult
+
+    /** Такой файл (то же содержимое) уже есть в тайнике — второй раз не добавлен. */
+    data class AlreadyThere(val entry: VaultEntry) : ImportResult
+}
 
 /**
  * Открытый тайник. Держит мастер-ключ в памяти, пока тайник открыт.
@@ -138,6 +161,113 @@ class VaultRepository(
 
     /** Удаляет мусор от прерванных операций. Вызывать при запуске приложения. */
     fun cleanupTmp() = storage.cleanupTmp()
+
+    // --- Файлы в тайнике --------------------------------------------------
+
+    /** Все изменения оглавления идут по одному: «прочитать → изменить → сохранить». */
+    private val indexLock = Any()
+
+    /** Оглавление открытого тайника. null — оглавление повреждено. */
+    fun loadIndex(session: VaultSession): VaultIndex? = withKeyCopy(session) { key ->
+        storage.loadIndex(key)
+    }
+
+    /**
+     * Добавляет файл в тайник.
+     *
+     * Файл шифруется и сразу расшифровывается для проверки (размер и отпечаток
+     * SHA-256 должны совпасть с прочитанным). Если в тайнике уже есть файл
+     * с таким же содержимым, второй раз он не добавляется.
+     * [thumbnailJpeg] — миниатюра для сетки (шифруется отдельным файлом).
+     */
+    fun importFile(
+        session: VaultSession,
+        input: InputStream,
+        meta: ImportMeta,
+        thumbnailJpeg: ByteArray?,
+    ): ImportResult = withKeyCopy(session) { key ->
+        val stored = storage.storeBlob(key, input, meta.size)
+        var thumbId: String? = null
+        try {
+            synchronized(indexLock) {
+                val index = storage.loadIndex(key) ?: error("оглавление повреждено")
+                val existing = index.findBySha256(stored.sha256)
+                if (existing != null) {
+                    storage.deleteBlob(stored.id)
+                    return@withKeyCopy ImportResult.AlreadyThere(existing)
+                }
+                thumbId = thumbnailJpeg?.let { storage.addBlob(key, ByteArrayInputStream(it)) }
+                val entry = VaultEntry(
+                    id = AtomicFiles.randomHex(16),
+                    name = meta.name,
+                    mime = meta.mime,
+                    kind = EntryKind.fromMime(meta.mime),
+                    size = stored.size,
+                    addedAt = System.currentTimeMillis(),
+                    blobId = stored.id,
+                    thumbId = thumbId,
+                    sha256 = stored.sha256,
+                    takenAt = meta.takenAt,
+                    durationMs = meta.durationMs,
+                )
+                storage.saveIndex(key, index.add(entry))
+                ImportResult.Added(entry)
+            }
+        } catch (e: Exception) {
+            // Запись в оглавление не удалась — убираем уже зашифрованные файлы.
+            storage.deleteBlob(stored.id)
+            thumbId?.let { storage.deleteBlob(it) }
+            throw e
+        }
+    }
+
+    /** Миниатюра записи (JPEG) или null, если её нет. */
+    fun readThumbnail(session: VaultSession, entry: VaultEntry): ByteArray? {
+        val thumbId = entry.thumbId ?: return null
+        return withKeyCopy(session) { key ->
+            try {
+                storage.openBlob(key, thumbId).use { it.readBytes() }
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    /**
+     * Поток с расшифрованным содержимым файла (для просмотра). Расшифровка идёт
+     * по мере чтения, на диск ничего не пишется. Закрывает поток вызывающий.
+     */
+    fun openContent(session: VaultSession, entry: VaultEntry): InputStream =
+        withKeyCopy(session) { key -> storage.openBlob(key, entry.blobId) }
+
+    /**
+     * Удаляет файл из тайника. Сначала запись исчезает из оглавления, потом
+     * удаляются зашифрованные файлы: при сбое между шагами останется лишь
+     * бесполезный зашифрованный «мусор», но не битая запись.
+     */
+    fun deleteEntry(session: VaultSession, entryId: String): Boolean = withKeyCopy(session) { key ->
+        synchronized(indexLock) {
+            val index = storage.loadIndex(key) ?: return@withKeyCopy false
+            val entry = index.find(entryId) ?: return@withKeyCopy false
+            storage.saveIndex(key, index.remove(entryId))
+            storage.deleteBlob(entry.blobId)
+            entry.thumbId?.let { storage.deleteBlob(it) }
+            true
+        }
+    }
+
+    /**
+     * Выполняет [block] с копией мастер-ключа и затирает копию после.
+     * Если тайник закроют посреди операции, копия останется целой.
+     */
+    private inline fun <T> withKeyCopy(session: VaultSession, block: (ByteArray) -> T): T {
+        val key = session.copyKey()
+        try {
+            return block(key)
+        } finally {
+            key.fill(0)
+        }
+    }
 
     // --- Внутреннее -------------------------------------------------------
 

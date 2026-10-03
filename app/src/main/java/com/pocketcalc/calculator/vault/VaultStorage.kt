@@ -6,7 +6,10 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.FilterInputStream
 import java.io.InputStream
+import java.security.DigestInputStream
+import java.security.MessageDigest
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -84,31 +87,48 @@ class VaultStorage(private val baseDir: File) {
 
     // --- Файлы (blobs) ----------------------------------------------------
 
+    /** Сохранённый зашифрованный файл: идентификатор, исходный размер и отпечаток. */
+    data class StoredBlob(val id: String, val size: Long, val sha256: String)
+
     /**
-     * Шифрует [input] в новый blob и возвращает его идентификатор.
-     * Перед тем как принять файл, он расшифровывается обратно для проверки;
-     * если задан [expectedSize] и он не совпал — операция отменяется.
+     * Шифрует [input] в новый blob.
+     *
+     * Пока данные читаются, считается их отпечаток SHA-256. Затем файл
+     * расшифровывается обратно, и отпечаток и размер сверяются с исходными:
+     * файл принимается, только если они совпали. Если задан [expectedSize]
+     * и прочитано другое количество байт — операция тоже отменяется.
      */
-    fun addBlob(masterKey: ByteArray, input: InputStream, expectedSize: Long? = null): String {
+    fun storeBlob(masterKey: ByteArray, input: InputStream, expectedSize: Long? = null): StoredBlob {
         val blobId = AtomicFiles.randomHex(16)
         val ad = blobId.toByteArray()
         val tmp = File(tmpDir, "blob-${AtomicFiles.randomHex(16)}")
         try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            val counting = CountingInputStream(DigestInputStream(input, digest))
             FileOutputStream(tmp).use { fos ->
-                FileCrypto.encrypt(input, fos, masterKey, ad)
+                FileCrypto.encrypt(counting, fos, masterKey, ad)
                 AtomicFiles.syncQuietly(fos)
             }
-            val decryptedSize = countDecrypted(tmp, masterKey, ad)
-            if (expectedSize != null && decryptedSize != expectedSize) {
-                error("проверка не прошла: размер $decryptedSize вместо $expectedSize")
+            val readSize = counting.count
+            val readSha = digest.digest()
+            if (expectedSize != null && readSize != expectedSize) {
+                error("проверка не прошла: прочитано $readSize байт вместо $expectedSize")
+            }
+            val (decryptedSize, decryptedSha) = digestDecrypted(tmp, masterKey, ad)
+            if (decryptedSize != readSize || !MessageDigest.isEqual(decryptedSha, readSha)) {
+                error("проверка не прошла: расшифрованное не совпало с исходным")
             }
             AtomicFiles.moveReplace(tmp, File(blobsDir, blobId))
+            return StoredBlob(blobId, readSize, readSha.toHex())
         } catch (e: Exception) {
             tmp.delete()
             throw e
         }
-        return blobId
     }
+
+    /** То же, что [storeBlob], но возвращает только идентификатор. */
+    fun addBlob(masterKey: ByteArray, input: InputStream, expectedSize: Long? = null): String =
+        storeBlob(masterKey, input, expectedSize).id
 
     /** Поток с расшифрованным содержимым blob (для просмотра). Закрывает его вызывающий. */
     fun openBlob(masterKey: ByteArray, blobId: String): InputStream {
@@ -133,7 +153,9 @@ class VaultStorage(private val baseDir: File) {
 
     // --- Внутреннее -------------------------------------------------------
 
-    private fun countDecrypted(file: File, masterKey: ByteArray, ad: ByteArray): Long {
+    /** Расшифровывает blob целиком, считая размер и отпечаток (без записи на диск). */
+    private fun digestDecrypted(file: File, masterKey: ByteArray, ad: ByteArray): Pair<Long, ByteArray> {
+        val digest = MessageDigest.getInstance("SHA-256")
         var total = 0L
         FileInputStream(file).use { fis ->
             FileCrypto.decryptingStream(fis, masterKey, ad).use { dec ->
@@ -141,10 +163,37 @@ class VaultStorage(private val baseDir: File) {
                 while (true) {
                     val n = dec.read(buf)
                     if (n < 0) break
+                    digest.update(buf, 0, n)
                     total += n
                 }
             }
         }
-        return total
+        return total to digest.digest()
     }
+
+    /** Считает, сколько байт прочитано из потока. */
+    private class CountingInputStream(input: InputStream) : FilterInputStream(input) {
+        var count = 0L
+            private set
+
+        override fun read(): Int {
+            val b = super.read()
+            if (b >= 0) count++
+            return b
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            val n = super.read(b, off, len)
+            if (n > 0) count += n
+            return n
+        }
+
+        override fun skip(n: Long): Long {
+            val skipped = super.skip(n)
+            count += skipped
+            return skipped
+        }
+    }
+
+    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 }

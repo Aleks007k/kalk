@@ -59,6 +59,65 @@ class VaultModelsTest {
         assertEquals(EntryKind.OTHER, EntryKind.fromId(-1))
     }
 
+    @Test fun readsVersion1Index() {
+        // Оглавление старого формата (версия 1, как у тайника из версии 0.3.0)
+        // должно читаться новой версией приложения.
+        val bos = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(bos).use { out ->
+            out.writeInt(1)            // версия
+            out.writeInt(1)            // одна запись
+            out.writeUTF("id1")
+            out.writeUTF("старое.jpg")
+            out.writeUTF("image/jpeg")
+            out.writeInt(EntryKind.PHOTO.ordinal)
+            out.writeLong(123)
+            out.writeLong(456)
+            out.writeUTF("blob1")
+            out.writeBoolean(true)
+            out.writeUTF("thumb1")
+        }
+        val index = VaultIndex.deserialize(bos.toByteArray())
+        val e = index.find("id1")!!
+        assertEquals("старое.jpg", e.name)
+        assertEquals("thumb1", e.thumbId)
+        assertEquals("", e.sha256)
+        assertEquals(0L, e.takenAt)
+    }
+
+    @Test fun readsEmptyVersion1Index() {
+        val bos = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(bos).use { out ->
+            out.writeInt(1)
+            out.writeInt(0)
+        }
+        assertEquals(0, VaultIndex.deserialize(bos.toByteArray()).entries.size)
+    }
+
+    @Test fun version2FieldsRoundTrip() {
+        val e = entry(9).copy(sha256 = "ab".repeat(32), takenAt = 1_700_000_000_000L, durationMs = 61_000)
+        val back = roundTrip(VaultIndex.empty().add(e)).find("id9")!!
+        assertEquals("ab".repeat(32), back.sha256)
+        assertEquals(1_700_000_000_000L, back.takenAt)
+        assertEquals(61_000L, back.durationMs)
+    }
+
+    @Test fun findBySha256() {
+        val idx = VaultIndex.empty()
+            .add(entry(1).copy(sha256 = "aa"))
+            .add(entry(2).copy(sha256 = "bb"))
+        assertEquals("id2", idx.findBySha256("bb")!!.id)
+        assertNull(idx.findBySha256("cc"))
+        assertNull("пустой отпечаток не совпадает ни с чем", idx.findBySha256(""))
+    }
+
+    @Test fun kindFromMime() {
+        assertEquals(EntryKind.PHOTO, EntryKind.fromMime("image/heic"))
+        assertEquals(EntryKind.VIDEO, EntryKind.fromMime("video/mp4"))
+        assertEquals(EntryKind.PDF, EntryKind.fromMime("application/pdf"))
+        assertEquals(EntryKind.NOTE, EntryKind.fromMime("text/plain"))
+        assertEquals(EntryKind.OTHER, EntryKind.fromMime("application/zip"))
+    }
+
     @Test fun sizesAndTimestampsPreserved() {
         val e = entry(7).copy(size = 9_999_999_999L, addedAt = 1_700_000_000_000L)
         val back = roundTrip(VaultIndex.empty().add(e)).find("id7")!!
