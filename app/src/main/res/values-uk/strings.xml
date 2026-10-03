@@ -37,9 +37,40 @@
     <string name="vault_title">Сховище</string>
     <string name="vault_lock">Закрити</string>
     <string name="vault_empty_title">Поки порожньо</string>
-    <string name="vault_empty_text">Додавання файлів з\'явиться в наступній версії.</string>
+    <string name="vault_empty_text">Натисніть «Фото й відео» або «Файли», щоб сховати файли.</string>
 
     <!-- Новий PIN після входу за кодом відновлення -->
     <string name="newpin_title">Придумайте новий PIN-код</string>
     <string name="newpin_saving">Зберігаю…</string>
+
+    <!-- Файлы в тайнике (этап 4) -->
+    <string name="vault_add_media">Фото й відео</string>
+    <string name="vault_add_files">Файли</string>
+    <string name="vault_damaged">Не вдалося прочитати список файлів сховища.</string>
+    <string name="vault_view_soon">Перегляд з\'явиться в наступній версії</string>
+    <string name="vault_delete_title">Видалити зі сховища?</string>
+    <string name="vault_delete_text">«%1$s» буде видалено назавжди. Повернути його буде неможливо.</string>
+    <string name="vault_delete_confirm">Видалити</string>
+    <string name="dialog_cancel">Скасувати</string>
+    <string name="picker_title">Виберіть фото й відео</string>
+    <string name="picker_selected">Вибрано: %1$d</string>
+    <string name="picker_hide">Сховати</string>
+    <string name="picker_empty">Фото й відео не знайдено</string>
+    <string name="picker_partial">Видно лише фото, до яких ви надали доступ.</string>
+    <string name="picker_partial_more">Вибрати інші</string>
+    <string name="permission_denied">Без доступу до фото й відео їх не вдасться додати. Дозвіл можна надати в налаштуваннях телефона: Застосунки → Калькулятор → Дозволи.</string>
+    <string name="import_progress">Шифрую %1$d з %2$d…</string>
+    <string name="import_keep_open">Не закривайте застосунок до кінця.</string>
+    <string name="import_done_title">Готово</string>
+    <string name="import_added">Сховано: %1$d</string>
+    <string name="import_duplicates">Уже були в сховищі: %1$d</string>
+    <string name="import_failed">Не вдалося додати: %1$d (оригінали не зачеплено)</string>
+    <string name="import_originals_deleted">Оригінали видалено з телефона.</string>
+    <string name="import_originals_kept">Оригінали залишилися на телефоні — їх можна видалити вручну.</string>
+    <string name="import_ok">OK</string>
+    <string name="docs_delete_title">Видалити оригінали?</string>
+    <string name="docs_delete_text">Файли вже зашифровано в сховищі. Видалити вихідні файли з телефона?</string>
+    <string name="docs_delete_confirm">Видалити</string>
+    <string name="docs_delete_keep">Залишити</string>
+    <string name="docs_delete_failed">Не вдалося видалити: %1$d — видаліть їх вручну.</string>
 </resources>

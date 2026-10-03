@@ -37,9 +37,40 @@
     <string name="vault_title">Vault</string>
     <string name="vault_lock">Close</string>
     <string name="vault_empty_title">Nothing here yet</string>
-    <string name="vault_empty_text">Adding files will come in the next version.</string>
+    <string name="vault_empty_text">Tap “Photos &amp; videos” or “Files” to hide files.</string>
 
     <!-- Новый PIN после входа по коду восстановления -->
     <string name="newpin_title">Create a new PIN</string>
     <string name="newpin_saving">Saving…</string>
+
+    <!-- Файлы в тайнике (этап 4) -->
+    <string name="vault_add_media">Photos &amp; videos</string>
+    <string name="vault_add_files">Files</string>
+    <string name="vault_damaged">Could not read the list of files in the vault.</string>
+    <string name="vault_view_soon">Viewing will come in the next version</string>
+    <string name="vault_delete_title">Delete from the vault?</string>
+    <string name="vault_delete_text">“%1$s” will be deleted forever. It cannot be restored.</string>
+    <string name="vault_delete_confirm">Delete</string>
+    <string name="dialog_cancel">Cancel</string>
+    <string name="picker_title">Choose photos and videos</string>
+    <string name="picker_selected">Selected: %1$d</string>
+    <string name="picker_hide">Hide</string>
+    <string name="picker_empty">No photos or videos found</string>
+    <string name="picker_partial">Only the photos you allowed are shown.</string>
+    <string name="picker_partial_more">Choose others</string>
+    <string name="permission_denied">Without access to photos and videos they can\'t be added. You can allow it in phone settings: Apps → Calculator → Permissions.</string>
+    <string name="import_progress">Encrypting %1$d of %2$d…</string>
+    <string name="import_keep_open">Please keep the app open until it finishes.</string>
+    <string name="import_done_title">Done</string>
+    <string name="import_added">Hidden: %1$d</string>
+    <string name="import_duplicates">Already in the vault: %1$d</string>
+    <string name="import_failed">Could not add: %1$d (originals untouched)</string>
+    <string name="import_originals_deleted">Originals deleted from the phone.</string>
+    <string name="import_originals_kept">Originals are still on the phone — you can delete them manually.</string>
+    <string name="import_ok">OK</string>
+    <string name="docs_delete_title">Delete the originals?</string>
+    <string name="docs_delete_text">The files are already encrypted in the vault. Delete the original files from the phone?</string>
+    <string name="docs_delete_confirm">Delete</string>
+    <string name="docs_delete_keep">Keep</string>
+    <string name="docs_delete_failed">Could not delete: %1$d — please delete them manually.</string>
 </resources>

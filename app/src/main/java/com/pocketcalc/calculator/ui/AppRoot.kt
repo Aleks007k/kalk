@@ -55,7 +55,7 @@ fun AppRoot(app: CalcApp) {
     when (AppController.screen) {
         Screen.SETUP -> SetupScreen(app, onDone = { AppController.onSetupFinished() })
         Screen.CALCULATOR -> CalculatorScreen(onEquals = onEquals)
-        Screen.VAULT -> VaultScreen(onLock = { AppController.lock() })
+        Screen.VAULT -> VaultScreen(app, onLock = { AppController.lock() })
         Screen.NEW_PIN -> NewPinScreen(
             app,
             onDone = { AppController.onPinChanged() },

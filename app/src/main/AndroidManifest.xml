@@ -2,11 +2,25 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      Приложение НЕ запрашивает разрешение INTERNET и никаких других разрешений.
-      Это проверяется в «Настройки → Приложения → Калькулятор → Разрешения»:
-      списка интернета там не будет, значит приложение физически не может
-      отправить данные в сеть.
+      Приложение НЕ запрашивает разрешение INTERNET: оно физически не может
+      отправить данные в сеть (проверяется в «Настройки → Приложения →
+      Калькулятор → Разрешения»).
+
+      Единственное разрешение — доступ к фото и видео, чтобы прятать их из
+      галереи. Его приложение запрашивает только изнутри тайника, при первом
+      добавлении файлов, и никогда — с экрана калькулятора.
     -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <!-- Android 12 и старше: старое общее разрешение на чтение. -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <!-- Android 9 и старше: удаление оригиналов из галереи. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <!--
       largeHeap: проверка PIN использует Argon2 (около 64 МБ памяти на каждую из

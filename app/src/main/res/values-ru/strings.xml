@@ -37,9 +37,40 @@
     <string name="vault_title">Тайник</string>
     <string name="vault_lock">Закрыть</string>
     <string name="vault_empty_title">Пока пусто</string>
-    <string name="vault_empty_text">Добавление файлов появится в следующей версии.</string>
+    <string name="vault_empty_text">Нажмите «Фото и видео» или «Файлы», чтобы спрятать файлы.</string>
 
     <!-- Новый PIN после входа по коду восстановления -->
     <string name="newpin_title">Придумайте новый PIN-код</string>
     <string name="newpin_saving">Сохраняю…</string>
+
+    <!-- Файлы в тайнике (этап 4) -->
+    <string name="vault_add_media">Фото и видео</string>
+    <string name="vault_add_files">Файлы</string>
+    <string name="vault_damaged">Не удалось прочитать список файлов тайника.</string>
+    <string name="vault_view_soon">Просмотр появится в следующей версии</string>
+    <string name="vault_delete_title">Удалить из тайника?</string>
+    <string name="vault_delete_text">«%1$s» будет удалён навсегда. Вернуть его будет невозможно.</string>
+    <string name="vault_delete_confirm">Удалить</string>
+    <string name="dialog_cancel">Отмена</string>
+    <string name="picker_title">Выберите фото и видео</string>
+    <string name="picker_selected">Выбрано: %1$d</string>
+    <string name="picker_hide">Спрятать</string>
+    <string name="picker_empty">Фото и видео не найдены</string>
+    <string name="picker_partial">Видны только фото, к которым вы дали доступ.</string>
+    <string name="picker_partial_more">Выбрать другие</string>
+    <string name="permission_denied">Без доступа к фото и видео их не получится добавить. Разрешение можно дать в настройках телефона: Приложения → Калькулятор → Разрешения.</string>
+    <string name="import_progress">Шифрую %1$d из %2$d…</string>
+    <string name="import_keep_open">Не закрывайте приложение до конца.</string>
+    <string name="import_done_title">Готово</string>
+    <string name="import_added">Спрятано: %1$d</string>
+    <string name="import_duplicates">Уже были в тайнике: %1$d</string>
+    <string name="import_failed">Не удалось добавить: %1$d (оригиналы не тронуты)</string>
+    <string name="import_originals_deleted">Оригиналы удалены с телефона.</string>
+    <string name="import_originals_kept">Оригиналы остались на телефоне — их можно удалить вручную.</string>
+    <string name="import_ok">ОК</string>
+    <string name="docs_delete_title">Удалить оригиналы?</string>
+    <string name="docs_delete_text">Файлы уже зашифрованы в тайнике. Удалить исходные файлы с телефона?</string>
+    <string name="docs_delete_confirm">Удалить</string>
+    <string name="docs_delete_keep">Оставить</string>
+    <string name="docs_delete_failed">Не удалось удалить: %1$d — удалите их вручную.</string>
 </resources>

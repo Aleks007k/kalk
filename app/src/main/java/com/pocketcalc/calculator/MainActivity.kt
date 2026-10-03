@@ -23,16 +23,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        AppController.isForeground = true
+        AppController.onActivityStart()
     }
 
     override fun onStop() {
         super.onStop()
-        AppController.isForeground = false
         // Ушли из приложения (домой, в другое приложение, выключили экран) —
-        // тайник запирается сразу. Поворот экрана тайник не запирает.
-        if (!isChangingConfigurations) {
-            AppController.lock()
-        }
+        // тайник запирается сразу. Поворот экрана и системные окна, открытые
+        // нашей кнопкой (выбор файлов), тайник сразу не запирают.
+        AppController.onActivityStop(isChangingConfigurations)
     }
 }
