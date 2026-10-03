@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Корпус калькулятора (белый, со скруглёнными углами). -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M40,22 h28 a6,6 0 0 1 6,6 v52 a6,6 0 0 1 -6,6 h-28 a6,6 0 0 1 -6,-6 v-52 a6,6 0 0 1 6,-6 z" />
+
+    <!-- Экран. -->
+    <path
+        android:fillColor="#FFE8EEFF"
+        android:pathData="M39,28 h30 v10 h-30 z" />
+
+    <!-- Кнопки: три столбца синих, правый столбец оранжевый. Четыре ряда. -->
+    <!-- Ряд 1 -->
+    <path android:fillColor="#FF3B74FF" android:pathData="M39,44 h8 v6 h-8 z" />
+    <path android:fillColor="#FF3B74FF" android:pathData="M50,44 h8 v6 h-8 z" />
+    <path android:fillColor="#FFFF8A00" android:pathData="M61,44 h8 v6 h-8 z" />
+    <!-- Ряд 2 -->
+    <path android:fillColor="#FF3B74FF" android:pathData="M39,53 h8 v6 h-8 z" />
+    <path android:fillColor="#FF3B74FF" android:pathData="M50,53 h8 v6 h-8 z" />
+    <path android:fillColor="#FFFF8A00" android:pathData="M61,53 h8 v6 h-8 z" />
+    <!-- Ряд 3 -->
+    <path android:fillColor="#FF3B74FF" android:pathData="M39,62 h8 v6 h-8 z" />
+    <path android:fillColor="#FF3B74FF" android:pathData="M50,62 h8 v6 h-8 z" />
+    <path android:fillColor="#FFFF8A00" android:pathData="M61,62 h8 v6 h-8 z" />
+    <!-- Ряд 4 -->
+    <path android:fillColor="#FF3B74FF" android:pathData="M39,71 h8 v6 h-8 z" />
+    <path android:fillColor="#FF3B74FF" android:pathData="M50,71 h8 v6 h-8 z" />
+    <path android:fillColor="#FFFF8A00" android:pathData="M61,71 h8 v6 h-8 z" />
+</vector>

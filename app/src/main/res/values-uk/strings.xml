@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Калькулятор</string>
+    <string name="cd_clear">Очистити</string>
+    <string name="cd_backspace">Стерти</string>
+    <string name="error_generic">Помилка</string>
+    <string name="error_div_zero">Ділення на нуль</string>
+</resources>

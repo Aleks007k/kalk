@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Calculator</string>
+    <string name="cd_clear">Clear</string>
+    <string name="cd_backspace">Backspace</string>
+    <string name="error_generic">Error</string>
+    <string name="error_div_zero">Cannot divide by zero</string>
+</resources>

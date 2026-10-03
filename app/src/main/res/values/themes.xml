@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Светлый фон окна на время запуска (до отрисовки Compose). -->
+    <style name="Theme.Calculator" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/calc_background_light</item>
+    </style>
+</resources>

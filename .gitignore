@@ -1,0 +1,19 @@
+# Сборка
+.gradle/
+build/
+app/build/
+dist/
+
+# Локальные настройки
+local.properties
+*.iml
+.idea/
+
+# Ключи подписи (в репозитории не храним)
+signing/
+*.p12
+*.jks
+*.keystore
+
+# Системное
+.DS_Store
