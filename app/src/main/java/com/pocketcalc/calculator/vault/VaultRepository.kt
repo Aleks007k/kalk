@@ -14,15 +14,26 @@ enum class SlotPos { A, B }
 /**
  * Открытый тайник. Держит мастер-ключ в памяти, пока тайник открыт.
  * [close] затирает ключ нулями — после этого тайник снова заперт.
+ *
+ * Тайник могут закрыть в любой момент (пользователь вышел из приложения),
+ * в том числе посреди фоновой операции. Поэтому долгие операции берут
+ * [copyKey] — копию, которую закрытие не испортит, — и сами затирают её.
  */
 class VaultSession internal constructor(val slot: SlotPos, masterKey: ByteArray) {
     private var key: ByteArray? = masterKey
 
-    val isOpen: Boolean get() = key != null
+    val isOpen: Boolean
+        @Synchronized get() = key != null
 
-    /** Мастер-ключ открытого тайника. Не изменяйте и не храните копий. */
-    val masterKey: ByteArray get() = key ?: throw IllegalStateException("тайник закрыт")
+    /** Мастер-ключ открытого тайника — только для коротких операций. Не изменяйте. */
+    val masterKey: ByteArray
+        @Synchronized get() = key ?: throw IllegalStateException("тайник закрыт")
 
+    /** Копия мастер-ключа для долгой операции. Вызывающий обязан затереть её. */
+    @Synchronized
+    fun copyKey(): ByteArray = (key ?: throw IllegalStateException("тайник закрыт")).copyOf()
+
+    @Synchronized
     fun close() {
         key?.fill(0)
         key = null
@@ -114,9 +125,15 @@ class VaultRepository(
 
     /** Меняет PIN открытого тайника. Мастер-ключ и код восстановления не меняются. */
     fun changePin(session: VaultSession, newPin: CharArray, gate: KeystoreGate) {
-        val slot = readSlot(session.slot) ?: error("слот не найден")
-        val updated = VaultKeyManager.changePin(slot, session.masterKey, newPin, gate, pinParams)
-        writeSlot(session.slot, updated)
+        // Копия ключа: если тайник закроют посреди операции, копия останется целой.
+        val master = session.copyKey()
+        try {
+            val slot = readSlot(session.slot) ?: error("слот не найден")
+            val updated = VaultKeyManager.changePin(slot, master, newPin, gate, pinParams)
+            writeSlot(session.slot, updated)
+        } finally {
+            master.fill(0)
+        }
     }
 
     /** Удаляет мусор от прерванных операций. Вызывать при запуске приложения. */

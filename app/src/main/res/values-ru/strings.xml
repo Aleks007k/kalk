@@ -5,4 +5,41 @@
     <string name="cd_backspace">Стереть</string>
     <string name="error_generic">Ошибка</string>
     <string name="error_div_zero">Деление на ноль</string>
+
+    <!-- Первичная настройка -->
+    <string name="setup_pin_title">Придумайте PIN-код</string>
+    <string name="setup_pin_hint">8–12 цифр, не с нуля. Его вы будете набирать в калькуляторе и нажимать «=».</string>
+    <string name="setup_pin_confirm_title">Повторите PIN-код</string>
+    <string name="setup_next">Далее</string>
+    <string name="setup_back">Назад</string>
+    <string name="pin_err_too_short">Нужно не меньше 8 цифр</string>
+    <string name="pin_err_too_long">Не больше 12 цифр</string>
+    <string name="pin_err_leading_zero">PIN не может начинаться с 0 — калькулятор не даёт набрать ноль в начале числа</string>
+    <string name="pin_err_all_same">Слишком простой PIN: все цифры одинаковые</string>
+    <string name="pin_err_sequence">Слишком простой PIN: цифры идут подряд</string>
+    <string name="pin_err_mismatch">PIN-коды не совпадают. Попробуйте ещё раз.</string>
+    <string name="recovery_title">Код восстановления</string>
+    <string name="recovery_text">Запишите эти 16 цифр на бумагу и храните отдельно от телефона. Это единственный способ открыть тайник, если вы забудете PIN. Скриншот сделать нельзя — так безопаснее.</string>
+    <string name="recovery_written">Код записан</string>
+    <string name="recovery_confirm_title">Проверим запись</string>
+    <string name="recovery_confirm_hint">Наберите код восстановления с бумаги</string>
+    <string name="recovery_check">Проверить</string>
+    <string name="recovery_mismatch">Код не совпадает. Проверьте запись.</string>
+    <string name="recovery_show_again">Показать код ещё раз</string>
+    <string name="setup_creating">Создаю тайник…</string>
+    <string name="setup_error">Не удалось создать тайник. Попробуйте ещё раз.</string>
+    <string name="setup_retry">Повторить</string>
+    <string name="setup_done_title">Готово!</string>
+    <string name="setup_done_text">Теперь приложение выглядит как обычный калькулятор.\n\nЧтобы открыть тайник, наберите PIN и нажмите «=».\n\nЕсли забудете PIN — наберите 16 цифр кода восстановления и нажмите «=».</string>
+    <string name="setup_done_ok">Понятно</string>
+
+    <!-- Тайник -->
+    <string name="vault_title">Тайник</string>
+    <string name="vault_lock">Закрыть</string>
+    <string name="vault_empty_title">Пока пусто</string>
+    <string name="vault_empty_text">Добавление файлов появится в следующей версии.</string>
+
+    <!-- Новый PIN после входа по коду восстановления -->
+    <string name="newpin_title">Придумайте новый PIN-код</string>
+    <string name="newpin_saving">Сохраняю…</string>
 </resources>

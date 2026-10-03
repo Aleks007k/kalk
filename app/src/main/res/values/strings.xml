@@ -5,4 +5,41 @@
     <string name="cd_backspace">Backspace</string>
     <string name="error_generic">Error</string>
     <string name="error_div_zero">Cannot divide by zero</string>
+
+    <!-- Первичная настройка -->
+    <string name="setup_pin_title">Create a PIN</string>
+    <string name="setup_pin_hint">8–12 digits, not starting with 0. You will type it in the calculator and press “=”.</string>
+    <string name="setup_pin_confirm_title">Repeat the PIN</string>
+    <string name="setup_next">Next</string>
+    <string name="setup_back">Back</string>
+    <string name="pin_err_too_short">At least 8 digits</string>
+    <string name="pin_err_too_long">No more than 12 digits</string>
+    <string name="pin_err_leading_zero">The PIN can\'t start with 0 — a calculator ignores a leading zero</string>
+    <string name="pin_err_all_same">Too simple: all digits are the same</string>
+    <string name="pin_err_sequence">Too simple: the digits go in a row</string>
+    <string name="pin_err_mismatch">The PINs don\'t match. Try again.</string>
+    <string name="recovery_title">Recovery code</string>
+    <string name="recovery_text">Write these 16 digits on paper and keep it away from your phone. It is the only way to open the vault if you forget the PIN. Screenshots are blocked for your safety.</string>
+    <string name="recovery_written">I wrote it down</string>
+    <string name="recovery_confirm_title">Let\'s check</string>
+    <string name="recovery_confirm_hint">Type the recovery code from your paper</string>
+    <string name="recovery_check">Check</string>
+    <string name="recovery_mismatch">The code doesn\'t match. Check your note.</string>
+    <string name="recovery_show_again">Show the code again</string>
+    <string name="setup_creating">Creating the vault…</string>
+    <string name="setup_error">Could not create the vault. Please try again.</string>
+    <string name="setup_retry">Retry</string>
+    <string name="setup_done_title">Done!</string>
+    <string name="setup_done_text">The app now looks like a regular calculator.\n\nTo open the vault, type your PIN and press “=”.\n\nIf you forget the PIN, type the 16-digit recovery code and press “=”.</string>
+    <string name="setup_done_ok">Got it</string>
+
+    <!-- Тайник -->
+    <string name="vault_title">Vault</string>
+    <string name="vault_lock">Close</string>
+    <string name="vault_empty_title">Nothing here yet</string>
+    <string name="vault_empty_text">Adding files will come in the next version.</string>
+
+    <!-- Новый PIN после входа по коду восстановления -->
+    <string name="newpin_title">Create a new PIN</string>
+    <string name="newpin_saving">Saving…</string>
 </resources>

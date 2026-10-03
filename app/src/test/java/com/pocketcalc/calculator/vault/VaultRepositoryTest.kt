@@ -166,6 +166,38 @@ class VaultRepositoryTest {
         }
     }
 
+    @Test fun keyCopySurvivesSessionClose() {
+        // Долгая операция взяла копию ключа; тайник закрыли — копия цела.
+        val r = repo()
+        val s = setUp(r)
+        val original = s.masterKey.copyOf()
+        val copy = s.copyKey()
+        s.close()
+        assertArrayEquals(original, copy)
+        try {
+            s.copyKey()
+            fail("после закрытия копию взять нельзя")
+        } catch (e: IllegalStateException) {
+            // ожидаемо
+        }
+    }
+
+    @Test fun changePinOnClosedSessionFailsWithoutDamage() {
+        // Если тайник закрыли до смены PIN, смена не проходит и слот не портится.
+        val r = repo()
+        val created = setUp(r)
+        val master = created.masterKey.copyOf()
+        val s = r.unlockWithPin(pin.toCharArray(), gate)!!
+        s.close()
+        try {
+            r.changePin(s, "73915284".toCharArray(), gate)
+            fail("смена PIN закрытого тайника должна быть отклонена")
+        } catch (e: IllegalStateException) {
+            // ожидаемо
+        }
+        assertArrayEquals(master, r.unlockWithPin(pin.toCharArray(), gate)!!.masterKey)
+    }
+
     @Test fun interruptedSetupWithoutFilesIsRestarted() {
         val dir = newDir()
         File(dir, "slot_A.bin").writeBytes(ByteArray(10))   // половинчатая настройка

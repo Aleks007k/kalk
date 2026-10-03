@@ -5,4 +5,41 @@
     <string name="cd_backspace">Стерти</string>
     <string name="error_generic">Помилка</string>
     <string name="error_div_zero">Ділення на нуль</string>
+
+    <!-- Первинне налаштування -->
+    <string name="setup_pin_title">Придумайте PIN-код</string>
+    <string name="setup_pin_hint">8–12 цифр, не з нуля. Його ви набиратимете в калькуляторі й натискатимете «=».</string>
+    <string name="setup_pin_confirm_title">Повторіть PIN-код</string>
+    <string name="setup_next">Далі</string>
+    <string name="setup_back">Назад</string>
+    <string name="pin_err_too_short">Потрібно не менше 8 цифр</string>
+    <string name="pin_err_too_long">Не більше 12 цифр</string>
+    <string name="pin_err_leading_zero">PIN не може починатися з 0 — калькулятор не дає набрати нуль на початку числа</string>
+    <string name="pin_err_all_same">Занадто простий PIN: усі цифри однакові</string>
+    <string name="pin_err_sequence">Занадто простий PIN: цифри йдуть підряд</string>
+    <string name="pin_err_mismatch">PIN-коди не збігаються. Спробуйте ще раз.</string>
+    <string name="recovery_title">Код відновлення</string>
+    <string name="recovery_text">Запишіть ці 16 цифр на папір і зберігайте окремо від телефона. Це єдиний спосіб відкрити сховище, якщо ви забудете PIN. Зробити знімок екрана не можна — так безпечніше.</string>
+    <string name="recovery_written">Код записано</string>
+    <string name="recovery_confirm_title">Перевіримо запис</string>
+    <string name="recovery_confirm_hint">Наберіть код відновлення з паперу</string>
+    <string name="recovery_check">Перевірити</string>
+    <string name="recovery_mismatch">Код не збігається. Перевірте запис.</string>
+    <string name="recovery_show_again">Показати код ще раз</string>
+    <string name="setup_creating">Створюю сховище…</string>
+    <string name="setup_error">Не вдалося створити сховище. Спробуйте ще раз.</string>
+    <string name="setup_retry">Повторити</string>
+    <string name="setup_done_title">Готово!</string>
+    <string name="setup_done_text">Тепер застосунок виглядає як звичайний калькулятор.\n\nЩоб відкрити сховище, наберіть PIN і натисніть «=».\n\nЯкщо забудете PIN — наберіть 16 цифр коду відновлення й натисніть «=».</string>
+    <string name="setup_done_ok">Зрозуміло</string>
+
+    <!-- Сховище -->
+    <string name="vault_title">Сховище</string>
+    <string name="vault_lock">Закрити</string>
+    <string name="vault_empty_title">Поки порожньо</string>
+    <string name="vault_empty_text">Додавання файлів з\'явиться в наступній версії.</string>
+
+    <!-- Новий PIN після входу за кодом відновлення -->
+    <string name="newpin_title">Придумайте новий PIN-код</string>
+    <string name="newpin_saving">Зберігаю…</string>
 </resources>

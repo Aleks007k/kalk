@@ -8,18 +8,30 @@
       отправить данные в сеть.
     -->
 
+    <!--
+      largeHeap: проверка PIN использует Argon2 (около 64 МБ памяти на каждую из
+      двух параллельных проверок), а позже тайник будет расшифровывать фото в память.
+    -->
     <application
+        android:name=".CalcApp"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:largeHeap="true"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Calculator">
 
+        <!--
+          configChanges: поворот экрана и смена темы не пересоздают окно, поэтому
+          незаконченная настройка (PIN, код восстановления) не теряется и не
+          сохраняется на диск системой.
+        -->
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|uiMode"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.Calculator">

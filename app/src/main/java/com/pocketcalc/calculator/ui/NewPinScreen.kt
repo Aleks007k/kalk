@@ -1,0 +1,71 @@
+package com.pocketcalc.calculator.ui
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import com.pocketcalc.calculator.CalcApp
+import com.pocketcalc.calculator.R
+import com.pocketcalc.calculator.ui.theme.calcPalette
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/**
+ * Новый PIN после входа по коду восстановления.
+ * «Назад» запирает тайник без изменений.
+ */
+@Composable
+fun NewPinScreen(app: CalcApp, onDone: () -> Unit, onCancel: () -> Unit) {
+    SecureWindow()
+    BackHandler(onBack = onCancel)
+    val palette = calcPalette(isSystemInDarkTheme())
+    val scope = rememberCoroutineScope()
+    var saving by remember { mutableStateOf(false) }
+
+    if (saving) {
+        StepLayout(title = stringResource(R.string.newpin_saving), palette = palette) {
+            Spacer(Modifier.height(48.dp))
+            CircularProgressIndicator(color = palette.opBg)
+        }
+        return
+    }
+
+    PinCreator(
+        title = stringResource(R.string.newpin_title),
+        palette = palette,
+        onPinChosen = { newPin ->
+            val session = AppController.session
+            if (session == null) {
+                onCancel()
+            } else {
+                saving = true
+                scope.launch {
+                    val ok = withContext(Dispatchers.Default) {
+                        val p = newPin.toCharArray()
+                        try {
+                            app.repository.changePin(session, p, app.gate)
+                            true
+                        } catch (e: Exception) {
+                            false
+                        } finally {
+                            p.fill('0')
+                        }
+                    }
+                    saving = false
+                    if (ok) onDone() else onCancel()
+                }
+            }
+        },
+    )
+}

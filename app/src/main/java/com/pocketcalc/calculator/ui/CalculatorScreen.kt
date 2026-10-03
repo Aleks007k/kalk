@@ -76,7 +76,7 @@ private val LAYOUT: List<List<Btn>> = listOf(
 )
 
 @Composable
-fun CalculatorScreen() {
+fun CalculatorScreen(onEquals: (String) -> Unit = {}) {
     val palette = calcPalette(isSystemInDarkTheme())
     val controller = remember { CalculatorController() }
 
@@ -89,6 +89,8 @@ fun CalculatorScreen() {
 
     fun onKey(key: Key) {
         if (key == Key.EQUALS) {
+            // Набранное до вычисления — на проверку (PIN / код восстановления).
+            onEquals(controller.rawExpression)
             val before = controller.state().display
             val evaluated = CalculatorEngine.evaluate(controller.rawExpression)
             val ns = controller.press(Key.EQUALS)
@@ -114,7 +116,9 @@ fun CalculatorScreen() {
         isError = false
         bigLine = ns.display
         val raw = controller.rawExpression
-        topLine = if (!ns.evaluated && raw.isNotEmpty()) {
+        // Подсказка результата — только когда есть действие (одно число не подсказываем).
+        val hasOperation = raw.drop(1).any { it in "+-*/" } || raw.contains('%')
+        topLine = if (!ns.evaluated && raw.isNotEmpty() && hasOperation) {
             val last = raw.last()
             if (last.isDigit() || last == '%' || last == ')') {
                 (CalculatorEngine.evaluate(raw) as? EvalResult.Ok)
