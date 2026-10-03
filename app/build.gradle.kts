@@ -90,6 +90,11 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+
+    // Шифрование: Google Tink (потоковое AES-GCM) + Argon2 из Bouncy Castle.
+    implementation(libs.tink)
+    implementation(libs.bouncycastle)
+
     debugImplementation(libs.androidx.ui.tooling)
 
     testImplementation(libs.junit)
