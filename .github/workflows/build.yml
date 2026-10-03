@@ -8,9 +8,8 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Тег версии для публикации в Releases (например, v0.1.0)"
-        required: false
-        default: "v0.1.0"
+        description: "Тег версии для публикации в Releases (например, v0.2.0)"
+        required: true
 
 permissions:
   contents: write
@@ -49,28 +48,57 @@ jobs:
       - name: Run unit tests
         run: ./gradlew test --stacktrace
 
-      - name: Prepare signing key (optional)
+      - name: Check signing setup (releases only)
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         env:
-          KS: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: |
-          if [ -n "$KS" ]; then
-            echo "$KS" | base64 -d > "$RUNNER_TEMP/release.p12"
-            echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
-            echo "Сборка будет подписана основным ключом."
-          else
-            echo "Секрет ключа не задан — релиз подписывается отладочным ключом."
+          if [ ! -f signing/release.p12 ]; then
+            echo "::error::Нет постоянного ключа подписи (signing/release.p12) — релиз не может быть выпущен."
+            exit 1
+          fi
+          if [ -z "$SIGNING_PASSWORD" ]; then
+            echo "::error::Не задан секрет SIGNING_PASSWORD — релиз не может быть выпущен."
+            exit 1
           fi
 
       - name: Build release APK
         env:
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Rename APK
         run: |
           mkdir -p dist
           cp app/build/outputs/apk/release/app-release.apk dist/Calculator.apk
+
+      - name: Verify release signature (releases only)
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          # Сравниваем отпечаток сертификата в APK с отпечатком постоянного ключа.
+          # Если APK подписан чем-то другим — релиз не выпускается.
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          APKSIGNER=$(ls "$SDK"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::Не найден apksigner в Android SDK — не могу проверить подпись."
+            exit 1
+          fi
+          APK_SHA=$("$APKSIGNER" verify --print-certs dist/Calculator.apk \
+            | grep -m1 "certificate SHA-256 digest" | sed 's/.*digest: //' \
+            | tr -d ' :' | tr 'A-F' 'a-f')
+          KEY_SHA=$(keytool -list -v -keystore signing/release.p12 -storetype PKCS12 \
+            -storepass:env SIGNING_PASSWORD -alias calculator \
+            | grep -m1 "SHA256:" | sed 's/.*SHA256: //' \
+            | tr -d ' :' | tr 'A-F' 'a-f')
+          echo "Отпечаток в APK:   $APK_SHA"
+          echo "Отпечаток ключа:   $KEY_SHA"
+          if [ -z "$APK_SHA" ] || [ "$APK_SHA" != "$KEY_SHA" ]; then
+            echo "::error::APK подписан не постоянным ключом — релиз отменён."
+            exit 1
+          fi
+          echo "Подпись APK совпадает с постоянным ключом."
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -90,6 +118,6 @@ jobs:
           name: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
           target_commitish: ${{ github.sha }}
           body: |
-            Установочный файл калькулятора (этап 1, тестовая подпись).
+            Установочный файл калькулятора (подписан постоянным ключом).
             Скачайте **Calculator.apk** ниже и установите на телефон
             (инструкция — в README репозитория).

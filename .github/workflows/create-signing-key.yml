@@ -1,0 +1,91 @@
+name: Create signing key (one-time)
+
+# Одноразовое создание постоянного ключа подписи приложения.
+# Запускается только вручную. Ключ шифруется паролем из секрета
+# SIGNING_PASSWORD, который знает только владелец репозитория.
+# Если ключ уже существует — процесс отказывается работать:
+# повторное создание сломало бы обновления приложения.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: create-signing-key
+  cancel-in-progress: false
+
+jobs:
+  create-key:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Refuse if key already exists
+        run: |
+          if [ -f signing/release.p12 ]; then
+            echo "::error::Ключ подписи уже существует (signing/release.p12). Повторное создание запрещено: это сломало бы обновления приложения."
+            exit 1
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Check password requirements
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          if [ -z "$SIGNING_PASSWORD" ]; then
+            echo "::error::Секрет SIGNING_PASSWORD не задан."
+            exit 1
+          fi
+          if [ "${#SIGNING_PASSWORD}" -lt 24 ]; then
+            echo "::error::Пароль короче 24 символов. Задайте более длинный SIGNING_PASSWORD."
+            exit 1
+          fi
+          if ! printf '%s' "$SIGNING_PASSWORD" | LC_ALL=C grep -qE '^[A-Za-z0-9]+$'; then
+            echo "::error::В пароле допустимы только латинские буквы и цифры — без пробелов, переносов строки и других символов."
+            exit 1
+          fi
+          echo "Пароль подходит по требованиям."
+
+      - name: Generate key
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          mkdir -p signing
+          # Пароль передаётся через переменную окружения, а не в командной строке.
+          keytool -genkeypair -noprompt \
+            -keystore signing/release.p12 -storetype PKCS12 \
+            -alias calculator -keyalg RSA -keysize 4096 -validity 10000 \
+            -dname "CN=Calculator" \
+            -storepass:env SIGNING_PASSWORD -keypass:env SIGNING_PASSWORD
+          # Проверка: ключ открывается этим паролем.
+          keytool -list -keystore signing/release.p12 -storetype PKCS12 \
+            -storepass:env SIGNING_PASSWORD -alias calculator > /dev/null
+          echo "Ключ создан и проверен."
+
+      - name: Show public certificate fingerprint
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          # Отпечаток сертификата — публичная информация, не секрет.
+          FP=$(keytool -list -v -keystore signing/release.p12 -storetype PKCS12 \
+            -storepass:env SIGNING_PASSWORD -alias calculator \
+            | grep -m1 "SHA256:" | sed 's/.*SHA256: //')
+          echo "Отпечаток сертификата (SHA-256): $FP"
+          echo "### Ключ подписи создан" >> "$GITHUB_STEP_SUMMARY"
+          echo "Отпечаток сертификата (SHA-256): \`$FP\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit key
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f signing/release.p12
+          git commit -m "Add release signing key (encrypted with SIGNING_PASSWORD)"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

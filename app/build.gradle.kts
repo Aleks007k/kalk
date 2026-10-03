@@ -1,5 +1,3 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -14,29 +12,26 @@ android {
         applicationId = "com.pocketcalc.calculator"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
 
     // Подпись релиза.
-    // Ключ НЕ хранится в репозитории. На GitHub его передают через секреты:
-    //   SIGNING_KEYSTORE_PATH — путь к файлу ключа, который CI создаёт из секрета;
-    //   SIGNING_PASSWORD      — пароль ключа;
-    //   SIGNING_KEY_ALIAS     — имя ключа (по умолчанию "calculator").
-    // Если секретов нет (локальная сборка или пока ключ не заведён) — релиз
-    // подписывается отладочным ключом, чтобы сборка всегда проходила.
-    val keystorePath: String? = System.getenv("SIGNING_KEYSTORE_PATH")
+    // Постоянный ключ лежит в signing/release.p12 и зашифрован паролем, который
+    // знает только владелец. Пароль передаётся сборке через секрет GitHub
+    // SIGNING_PASSWORD. Без пароля (локальная сборка, чужой PR) релиз
+    // подписывается отладочным ключом — такие сборки не публикуются
+    // (CI проверяет подпись перед выпуском релиза).
+    val keystoreFile = rootProject.file("signing/release.p12")
     val signingPassword: String? = System.getenv("SIGNING_PASSWORD")
-    val keyAliasEnv: String = System.getenv("SIGNING_KEY_ALIAS") ?: "calculator"
-    val keystoreFile = keystorePath?.let { file(it) }
-    val hasRealSigning = keystoreFile != null && keystoreFile.exists() && !signingPassword.isNullOrBlank()
+    val hasRealSigning = keystoreFile.exists() && !signingPassword.isNullOrBlank()
 
     signingConfigs {
         if (hasRealSigning) {
             create("release") {
                 storeFile = keystoreFile
                 storePassword = signingPassword
-                keyAlias = keyAliasEnv
+                keyAlias = "calculator"
                 keyPassword = signingPassword
                 storeType = "PKCS12"
             }
