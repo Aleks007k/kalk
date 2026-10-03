@@ -40,11 +40,44 @@ class VaultStorageTest {
         assertEquals(0, s.loadIndex(master)!!.entries.size)
     }
 
-    @Test fun wrongMasterKeyFailsToLoadIndex() {
+    @Test fun differentMastersHaveSeparateIndexes() {
+        // У каждого тайника своё оглавление: чужой ключ видит пустой тайник,
+        // а не чужие записи.
         val (s, _) = newStorage()
         s.saveIndex(master, VaultIndex.empty().add(entry("a", "blobA")))
-        val wrong = ByteArray(32) { (it + 9).toByte() }
-        assertNull(s.loadIndex(wrong))
+        val other = ByteArray(32) { (it + 9).toByte() }
+        assertEquals(0, s.loadIndex(other)!!.entries.size)
+        s.saveIndex(other, VaultIndex.empty().add(entry("x", "blobX")).add(entry("y", "blobY")))
+        assertEquals(1, s.loadIndex(master)!!.entries.size)
+        assertEquals(2, s.loadIndex(other)!!.entries.size)
+    }
+
+    @Test fun indexFileNameDoesNotRevealOwner() {
+        // В папке нет файла с «говорящим» именем — только index_<случайный вид>.bin.
+        val (s, dir) = newStorage()
+        s.saveIndex(master, VaultIndex.empty())
+        val names = dir.listFiles()!!.map { it.name }.filter { it.startsWith("index") }
+        assertEquals(1, names.size)
+        assertTrue(names[0].matches(Regex("index_[0-9a-f]{32}\\.bin")))
+    }
+
+    @Test fun corruptedIndexReturnsNull() {
+        val (s, dir) = newStorage()
+        s.saveIndex(master, VaultIndex.empty().add(entry("a", "blobA")))
+        val indexFile = dir.listFiles()!!.first { it.name.startsWith("index_") }
+        val bytes = indexFile.readBytes()
+        bytes[bytes.size / 2] = (bytes[bytes.size / 2].toInt() xor 0x01).toByte()
+        indexFile.writeBytes(bytes)
+        assertNull(s.loadIndex(master))
+    }
+
+    @Test fun hasBlobsReflectsContent() {
+        val (s, _) = newStorage()
+        assertFalse(s.hasBlobs())
+        val id = s.addBlob(master, ByteArrayInputStream("x".toByteArray()))
+        assertTrue(s.hasBlobs())
+        s.deleteBlob(id)
+        assertFalse(s.hasBlobs())
     }
 
     @Test fun saveIndexTwiceLoadsLatest() {
