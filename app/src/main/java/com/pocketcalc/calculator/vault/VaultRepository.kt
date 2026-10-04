@@ -6,8 +6,10 @@ import com.pocketcalc.calculator.crypto.SoftwareKeystoreGate
 import com.pocketcalc.calculator.crypto.VaultKeyManager
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.EOFException
 import java.io.InputStream
 import java.io.OutputStream
+import java.nio.channels.SeekableByteChannel
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.concurrent.CompletableFuture
@@ -247,6 +249,32 @@ class VaultRepository(
      */
     fun openContent(session: VaultSession, entry: VaultEntry): InputStream =
         withKeyCopy(session) { key -> storage.openBlob(key, entry.blobId) }
+
+    /**
+     * Расшифровка с произвольным доступом (видео с перемоткой): на диск
+     * ничего не пишется. Закрывает канал вызывающий.
+     */
+    fun openSeekable(session: VaultSession, entry: VaultEntry): SeekableByteChannel =
+        withKeyCopy(session) { key -> storage.openBlobSeekable(key, entry.blobId) }
+
+    /**
+     * Весь файл целиком в память (для показа фото). Файлы больше [maxBytes]
+     * не читаются — их показ занял бы слишком много памяти.
+     */
+    fun readContent(session: VaultSession, entry: VaultEntry, maxBytes: Long): ByteArray {
+        require(entry.size in 0..maxBytes) { "файл слишком большой для показа: ${entry.size} байт" }
+        val bytes = ByteArray(entry.size.toInt())
+        openContent(session, entry).use { input ->
+            var off = 0
+            while (off < bytes.size) {
+                val n = input.read(bytes, off, bytes.size - off)
+                if (n < 0) throw EOFException("файл короче, чем записано в оглавлении")
+                off += n
+            }
+            check(input.read() < 0) { "файл длиннее, чем записано в оглавлении" }
+        }
+        return bytes
+    }
 
     /**
      * Расшифровывает файл в [out] (например, в новый файл в Галерее) и проверяет

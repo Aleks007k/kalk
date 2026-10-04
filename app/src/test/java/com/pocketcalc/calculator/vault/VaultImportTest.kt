@@ -227,4 +227,62 @@ class VaultImportTest {
         val data = photo(25, size = 200_000)
         assertEquals(sha256Hex(data), Sha256.of(ByteArrayInputStream(data)))
     }
+
+    @Test fun seekableReadsAnyRangeExactly() {
+        val (repo, s, _) = newVault()
+        val data = photo(30, size = 3 * 1024 * 1024 + 4321)   // несколько кусков по 1 МБ
+        val entry = (repo.importFile(s, ByteArrayInputStream(data), ImportMeta("v.mp4", "video/mp4"), null)
+            as ImportResult.Added).entry
+        // Размер берётся из оглавления: до первого чтения канал свой размер не знает.
+        assertEquals(data.size.toLong(), entry.size)
+        // Чтение с разных мест (и сразу с середины — как при перемотке видео),
+        // в том числе через границу кусков и в самом конце.
+        val positions = listOf(2L * 1024 * 1024 + 100, 0L, 1L, 1024L * 1024 - 7, data.size - 10L)
+        repo.openSeekable(s, entry).use { ch ->
+            for (pos in positions) {
+                val want = minOf(4096, (data.size - pos).toInt())
+                val buf = java.nio.ByteBuffer.allocate(want)
+                ch.position(pos)
+                while (buf.hasRemaining()) {
+                    if (ch.read(buf) < 0) break
+                }
+                assertArrayEquals("позиция $pos", data.copyOfRange(pos.toInt(), pos.toInt() + want), buf.array())
+            }
+            ch.position(data.size.toLong())
+            assertEquals("в конце файла — конец данных", -1, ch.read(java.nio.ByteBuffer.allocate(16)))
+        }
+    }
+
+    @Test fun seekableFromClosedVaultIsRefused() {
+        val (repo, s, _) = newVault()
+        val entry = (repo.importFile(s, ByteArrayInputStream(photo(31)), ImportMeta("v.mp4", "video/mp4"), null)
+            as ImportResult.Added).entry
+        s.close()
+        try {
+            repo.openSeekable(s, entry)
+            fail("из закрытого тайника читать нельзя")
+        } catch (e: IllegalStateException) {
+            // ожидаемо
+        }
+    }
+
+    @Test fun readContentReturnsWholeFile() {
+        val (repo, s, _) = newVault()
+        val data = photo(32, size = 1024 * 1024 + 99)
+        val entry = (repo.importFile(s, ByteArrayInputStream(data), ImportMeta("p.jpg", "image/jpeg"), null)
+            as ImportResult.Added).entry
+        assertArrayEquals(data, repo.readContent(s, entry, maxBytes = 10L * 1024 * 1024))
+    }
+
+    @Test fun readContentRefusesTooBigFile() {
+        val (repo, s, _) = newVault()
+        val entry = (repo.importFile(s, ByteArrayInputStream(photo(33)), ImportMeta("p.jpg", "image/jpeg"), null)
+            as ImportResult.Added).entry
+        try {
+            repo.readContent(s, entry, maxBytes = 10)
+            fail("слишком большой файл не должен читаться в память")
+        } catch (e: IllegalArgumentException) {
+            // ожидаемо
+        }
+    }
 }

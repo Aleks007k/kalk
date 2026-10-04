@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
       Приложение НЕ запрашивает разрешение INTERNET: оно физически не может
@@ -18,6 +19,15 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
+
+    <!--
+      Запрет на сеть, даже если его попросит какая-нибудь библиотека: такие
+      строки вычёркивают разрешение из итогового приложения. Сборка на GitHub
+      дополнительно проверяет готовый APK и не выпускает версию с интернетом.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" tools:node="remove" />
     <!-- Android 12 и старше: старое общее разрешение на чтение. -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"

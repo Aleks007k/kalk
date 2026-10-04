@@ -72,6 +72,23 @@ jobs:
           mkdir -p dist
           cp app/build/outputs/apk/release/app-release.apk dist/Calculator.apk
 
+      - name: Check permissions (no network)
+        run: |
+          # Приложение никогда не должно получать доступ к сети — проверяем
+          # готовый APK (вместе со всеми библиотеками), а не только наш манифест.
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          AAPT2=$(ls "$SDK"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$AAPT2" ]; then
+            echo "::error::Не найден aapt2 в Android SDK — не могу проверить разрешения."
+            exit 1
+          fi
+          "$AAPT2" dump permissions dist/Calculator.apk | tee permissions.txt
+          if grep -Eq "android.permission.(INTERNET|ACCESS_NETWORK_STATE|ACCESS_WIFI_STATE)" permissions.txt; then
+            echo "::error::В приложении появилось сетевое разрешение — сборка остановлена."
+            exit 1
+          fi
+          echo "Сетевых разрешений нет."
+
       - name: Verify release signature (releases only)
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         env:

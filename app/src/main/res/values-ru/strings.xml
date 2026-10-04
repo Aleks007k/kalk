@@ -46,7 +46,6 @@
     <string name="vault_add_media">Фото и видео</string>
     <string name="vault_add_files">Файлы</string>
     <string name="vault_damaged">Не удалось прочитать список файлов тайника.</string>
-    <string name="vault_view_soon">Просмотр появится в следующей версии</string>
     <string name="vault_delete_title">Удалить из тайника?</string>
     <string name="vault_delete_text">«%1$s» будет удалён навсегда. Вернуть его будет невозможно.</string>
     <string name="vault_delete_confirm">Удалить</string>
@@ -79,4 +78,11 @@
     <string name="restore_done">Возвращено в папку %1$s</string>
     <string name="restore_done_copy_kept">Возвращено в папку %1$s. Копия осталась и здесь.</string>
     <string name="restore_failed">Не удалось вернуть файл. Он остался здесь.</string>
+
+    <!-- Просмотр на весь экран -->
+    <string name="viewer_too_big">Файл слишком большой для просмотра. Его можно восстановить через ⋮.</string>
+    <string name="viewer_cant_show">Не удалось показать этот файл. Его можно восстановить через ⋮.</string>
+    <string name="viewer_video_failed">Не удалось воспроизвести видео. Его можно восстановить через ⋮.</string>
+    <string name="viewer_soon">Просмотр PDF и заметок появится в следующей версии.</string>
+    <string name="viewer_other">Такие файлы можно хранить здесь и возвращать в телефон.</string>
 </resources>

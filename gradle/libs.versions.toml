@@ -9,6 +9,10 @@ activityCompose = "1.9.3"
 composeBom = "2024.12.01"
 tink = "1.19.0"
 bouncycastle = "1.82"
+# Просмотр: видеоплеер Google (той же поры, что и Compose BOM выше) и
+# жесты увеличения для фото. Обе — без доступа к сети.
+media3 = "1.5.1"
+telephoto = "0.15.1"
 junit = "4.13.2"
 
 [libraries]
@@ -23,6 +27,9 @@ androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-toolin
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 tink = { group = "com.google.crypto.tink", name = "tink", version.ref = "tink" }
 bouncycastle = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
+media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
+media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
+telephoto-zoomable = { group = "me.saket.telephoto", name = "zoomable", version.ref = "telephoto" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -121,6 +122,10 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
     var askDeleteDocs by remember { mutableStateOf<List<Uri>?>(null) }
     var showSummary by remember { mutableStateOf(false) }
     var actionsFor by remember { mutableStateOf<VaultEntry?>(null) }
+    /** Открытый на весь экран файл (null — показана сетка). */
+    var viewingId by remember { mutableStateOf<String?>(null) }
+    val gridState = rememberLazyGridState()
+    var visibleAtOpen by remember { mutableStateOf(IntRange.EMPTY) }
     var toDelete by remember { mutableStateOf<VaultEntry?>(null) }
     var noPermission by remember { mutableStateOf(false) }
 
@@ -134,7 +139,21 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
     }
 
     val thumbCache = remember { thumbnailCache(48 * 1024 * 1024) }
-    val viewSoon = stringResource(R.string.vault_view_soon)
+
+    fun openViewer(entry: VaultEntry) {
+        val visible = gridState.layoutInfo.visibleItemsInfo
+        visibleAtOpen = if (visible.isEmpty()) IntRange.EMPTY else visible.first().index..visible.last().index
+        viewingId = entry.id
+    }
+
+    /** Закрыть просмотр; если листали далеко — прокрутить сетку к последнему файлу. */
+    fun closeViewer(lastEntryId: String?) {
+        viewingId = null
+        val index = entries?.indexOfFirst { it.id == lastEntryId } ?: -1
+        if (index >= 0 && index !in visibleAtOpen) {
+            scope.launch { gridState.scrollToItem(index) }
+        }
+    }
 
     BackHandler {
         when (flow) {
@@ -324,6 +343,8 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
             .fillMaxSize()
             .background(palette.background),
     ) {
+        val viewerEntries = entries
+        val openId = viewingId
         if (flow is VaultFlow.Picking) {
             key(pickerKey) {
                 MediaPickerScreen(
@@ -334,6 +355,18 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                     onRequestMoreAccess = { requestMediaAccess() },
                 )
             }
+        } else if (openId != null && viewerEntries != null) {
+            ViewerScreen(
+                entries = viewerEntries,
+                startEntryId = openId,
+                repository = app.repository,
+                session = session,
+                thumbCache = thumbCache,
+                // Пока идёт возврат файла, «Назад» не закрывает просмотр.
+                canClose = flow is VaultFlow.Browse,
+                onClose = ::closeViewer,
+                onActions = { entry -> actionsFor = entry },
+            )
         } else {
             Column(
                 modifier = Modifier
@@ -377,6 +410,7 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                         )
                         else -> LazyVerticalGrid(
                             columns = GridCells.Fixed(columns),
+                            state = gridState,
                             modifier = Modifier.fillMaxSize(),
                         ) {
                             items(list, key = { it.id }) { entry ->
@@ -392,9 +426,7 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                                             null
                                         }
                                     },
-                                    onClick = {
-                                        Toast.makeText(context, viewSoon, Toast.LENGTH_SHORT).show()
-                                    },
+                                    onClick = { openViewer(entry) },
                                     onLongClick = { actionsFor = entry },
                                 )
                             }
@@ -708,7 +740,7 @@ private fun VaultCell(
 }
 
 /** "отчёт.pdf" → "PDF"; без расширения — по типу. */
-private fun extensionLabel(entry: VaultEntry): String {
+internal fun extensionLabel(entry: VaultEntry): String {
     val ext = entry.name.substringAfterLast('.', "").uppercase()
     if (ext.isNotEmpty() && ext.length <= 5) return ext
     return when (entry.kind) {

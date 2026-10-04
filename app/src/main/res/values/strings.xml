@@ -46,7 +46,6 @@
     <string name="vault_add_media">Photos &amp; videos</string>
     <string name="vault_add_files">Files</string>
     <string name="vault_damaged">Could not read the list of files in the vault.</string>
-    <string name="vault_view_soon">Viewing will come in the next version</string>
     <string name="vault_delete_title">Delete from the vault?</string>
     <string name="vault_delete_text">“%1$s” will be deleted forever. It cannot be restored.</string>
     <string name="vault_delete_confirm">Delete</string>
@@ -79,4 +78,11 @@
     <string name="restore_done">Restored to the folder %1$s</string>
     <string name="restore_done_copy_kept">Restored to the folder %1$s. A copy also stayed here.</string>
     <string name="restore_failed">Could not restore the file. It is still here.</string>
+
+    <!-- Просмотр на весь экран -->
+    <string name="viewer_too_big">This file is too big to view here. You can still restore it with ⋮.</string>
+    <string name="viewer_cant_show">Could not show this file. You can still restore it with ⋮.</string>
+    <string name="viewer_video_failed">Could not play this video. You can still restore it with ⋮.</string>
+    <string name="viewer_soon">Viewing PDFs and notes will come in the next version.</string>
+    <string name="viewer_other">Files like this can be kept here and restored to the phone.</string>
 </resources>

@@ -10,6 +10,7 @@ import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import com.google.crypto.tink.util.SecretBytes
 import java.io.InputStream
 import java.io.OutputStream
+import java.nio.channels.SeekableByteChannel
 
 /**
  * Потоковое шифрование файлов на Google Tink (режим AES256-GCM-HKDF, куски по 1 МБ).
@@ -81,6 +82,18 @@ object FileCrypto {
      */
     fun decryptingStream(ciphertext: InputStream, key32: ByteArray, associatedData: ByteArray): InputStream =
         primitive(key32).newDecryptingStream(ciphertext, associatedData)
+
+    /**
+     * Расшифровка с произвольным доступом: можно читать с любого места, не
+     * расшифровывая всё до него (нужно видео для перемотки). Расшифровываются
+     * и проверяются только нужные куски. Закрытие возвращённого канала
+     * закрывает и [ciphertext].
+     */
+    fun seekableDecryptingChannel(
+        ciphertext: SeekableByteChannel,
+        key32: ByteArray,
+        associatedData: ByteArray,
+    ): SeekableByteChannel = primitive(key32).newSeekableDecryptingChannel(ciphertext, associatedData)
 
     /** Поток, в который пишутся данные для шифрования на лету. */
     fun encryptingStream(ciphertext: OutputStream, key32: ByteArray, associatedData: ByteArray): OutputStream =

@@ -8,6 +8,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.FilterInputStream
 import java.io.InputStream
+import java.nio.channels.SeekableByteChannel
 import java.security.DigestInputStream
 import java.security.MessageDigest
 import javax.crypto.Mac
@@ -134,6 +135,20 @@ class VaultStorage(private val baseDir: File) {
     fun openBlob(masterKey: ByteArray, blobId: String): InputStream {
         val fis = FileInputStream(File(blobsDir, blobId))
         return FileCrypto.decryptingStream(fis, masterKey, blobId.toByteArray())
+    }
+
+    /**
+     * Расшифровка blob с произвольным доступом (видео с перемоткой).
+     * Закрывает канал вызывающий.
+     */
+    fun openBlobSeekable(masterKey: ByteArray, blobId: String): SeekableByteChannel {
+        val channel = FileInputStream(File(blobsDir, blobId)).channel
+        return try {
+            FileCrypto.seekableDecryptingChannel(channel, masterKey, blobId.toByteArray())
+        } catch (e: Exception) {
+            channel.close()
+            throw e
+        }
     }
 
     /** Удаляет blob. */
