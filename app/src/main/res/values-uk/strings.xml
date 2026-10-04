@@ -36,15 +36,15 @@
     <!-- Сховище -->
     <string name="vault_lock">Закрити</string>
     <string name="vault_empty_title">Поки порожньо</string>
-    <string name="vault_empty_text">Натисніть «Фото й відео» або «Файли», щоб сховати файли.</string>
+    <string name="vault_empty_text">Натисніть «+ Фото й відео», щоб сховати фото й відео.</string>
 
     <!-- Новий PIN після входу за кодом відновлення -->
     <string name="newpin_title">Придумайте новий PIN-код</string>
     <string name="newpin_saving">Зберігаю…</string>
 
     <!-- Файлы в тайнике (этап 4) -->
-    <string name="vault_add_media">Фото й відео</string>
-    <string name="vault_add_files">Файли</string>
+    <string name="vault_add_media">+ Фото й відео</string>
+    <string name="vault_add_files">+ Файли</string>
     <string name="vault_damaged">Не вдалося прочитати список файлів сховища.</string>
     <string name="vault_delete_title">Видалити зі сховища?</string>
     <string name="vault_delete_text">«%1$s» буде видалено назавжди. Повернути його буде неможливо.</string>
@@ -95,4 +95,10 @@
     <string name="note_default_name">Нотатка %1$s</string>
     <string name="note_empty">Порожня нотатка</string>
     <string name="viewer_pdf_locked">PDF захищено паролем. Його можна відновити через ⋮.</string>
+
+    <!-- Разделы тайника -->
+    <string name="section_media">Фото й відео</string>
+    <string name="section_files">Файли</string>
+    <string name="files_empty_title">Файлів поки немає</string>
+    <string name="files_empty_text">Тут зберігаються документи й нотатки. Натисніть «+ Файли» або «+ Нотатка».</string>
 </resources>

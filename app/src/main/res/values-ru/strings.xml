@@ -36,15 +36,15 @@
     <!-- Тайник -->
     <string name="vault_lock">Закрыть</string>
     <string name="vault_empty_title">Пока пусто</string>
-    <string name="vault_empty_text">Нажмите «Фото и видео» или «Файлы», чтобы спрятать файлы.</string>
+    <string name="vault_empty_text">Нажмите «+ Фото и видео», чтобы спрятать фото и видео.</string>
 
     <!-- Новый PIN после входа по коду восстановления -->
     <string name="newpin_title">Придумайте новый PIN-код</string>
     <string name="newpin_saving">Сохраняю…</string>
 
     <!-- Файлы в тайнике (этап 4) -->
-    <string name="vault_add_media">Фото и видео</string>
-    <string name="vault_add_files">Файлы</string>
+    <string name="vault_add_media">+ Фото и видео</string>
+    <string name="vault_add_files">+ Файлы</string>
     <string name="vault_damaged">Не удалось прочитать список файлов тайника.</string>
     <string name="vault_delete_title">Удалить из тайника?</string>
     <string name="vault_delete_text">«%1$s» будет удалён навсегда. Вернуть его будет невозможно.</string>
@@ -95,4 +95,10 @@
     <string name="note_default_name">Заметка %1$s</string>
     <string name="note_empty">Пустая заметка</string>
     <string name="viewer_pdf_locked">PDF защищён паролем. Его можно восстановить через ⋮.</string>
+
+    <!-- Разделы тайника -->
+    <string name="section_media">Фото и видео</string>
+    <string name="section_files">Файлы</string>
+    <string name="files_empty_title">Файлов пока нет</string>
+    <string name="files_empty_text">Здесь хранятся документы и заметки. Нажмите «+ Файлы» или «+ Заметка».</string>
 </resources>

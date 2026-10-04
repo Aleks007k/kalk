@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.text.format.Formatter
 import android.util.LruCache
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -21,18 +22,24 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -49,6 +56,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -81,9 +89,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
+import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+/** Раздел тайника: фото и видео — сеткой, остальное (PDF, заметки, документы) — списком. */
+private enum class Section { MEDIA, FILES }
+
+private val VaultEntry.isMedia: Boolean
+    get() = kind == EntryKind.PHOTO || kind == EntryKind.VIDEO
 
 /** Заметка, открытая в редакторе. [token] отличает одно открытие от другого. */
 private data class NoteEdit(val title: String, val text: String, val token: Long = System.nanoTime())
@@ -139,7 +154,9 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
     /** Открытый на весь экран файл (null — показана сетка). */
     var viewingId by remember { mutableStateOf<String?>(null) }
     val gridState = rememberLazyGridState()
+    val listState = rememberLazyListState()
     var visibleAtOpen by remember { mutableStateOf(IntRange.EMPTY) }
+    var section by remember { mutableStateOf(Section.MEDIA) }
     var toDelete by remember { mutableStateOf<VaultEntry?>(null) }
     var noPermission by remember { mutableStateOf(false) }
 
@@ -154,18 +171,29 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
 
     val thumbCache = remember { thumbnailCache(48 * 1024 * 1024) }
 
+    // Фото и видео — отдельно от документов и заметок.
+    val mediaEntries = remember(entries) { entries?.filter { it.isMedia } }
+    val fileEntries = remember(entries) { entries?.filterNot { it.isMedia } }
+    val sectionEntries = if (section == Section.MEDIA) mediaEntries else fileEntries
+
     fun openViewer(entry: VaultEntry) {
-        val visible = gridState.layoutInfo.visibleItemsInfo
-        visibleAtOpen = if (visible.isEmpty()) IntRange.EMPTY else visible.first().index..visible.last().index
+        val visible = if (section == Section.MEDIA) {
+            gridState.layoutInfo.visibleItemsInfo.map { it.index }
+        } else {
+            listState.layoutInfo.visibleItemsInfo.map { it.index }
+        }
+        visibleAtOpen = if (visible.isEmpty()) IntRange.EMPTY else visible.first()..visible.last()
         viewingId = entry.id
     }
 
-    /** Закрыть просмотр; если листали далеко — прокрутить сетку к последнему файлу. */
+    /** Закрыть просмотр; если листали далеко — прокрутить раздел к последнему файлу. */
     fun closeViewer(lastEntryId: String?) {
         viewingId = null
-        val index = entries?.indexOfFirst { it.id == lastEntryId } ?: -1
+        val index = sectionEntries?.indexOfFirst { it.id == lastEntryId } ?: -1
         if (index >= 0 && index !in visibleAtOpen) {
-            scope.launch { gridState.scrollToItem(index) }
+            scope.launch {
+                if (section == Section.MEDIA) gridState.scrollToItem(index) else listState.scrollToItem(index)
+            }
         }
     }
 
@@ -174,7 +202,8 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
             is VaultFlow.Picking -> flow = VaultFlow.Browse
             // во время шифрования или возврата «Назад» не прерывает работу
             is VaultFlow.Importing, is VaultFlow.Restoring -> Unit
-            is VaultFlow.Browse -> onLock()
+            // из «Файлов» — сначала к фото, потом уже закрыть тайник
+            is VaultFlow.Browse -> if (section == Section.FILES) section = Section.MEDIA else onLock()
         }
     }
 
@@ -402,7 +431,7 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
             .fillMaxSize()
             .background(palette.background),
     ) {
-        val viewerEntries = entries
+        val viewerEntries = sectionEntries
         val openId = viewingId
         if (flow is VaultFlow.Picking) {
             key(pickerKey) {
@@ -444,79 +473,140 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                         .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(onClick = { openNewNote() }) {
-                        Text(text = stringResource(R.string.note_new), color = palette.opBg, fontSize = 17.sp)
-                    }
-                    Spacer(Modifier.weight(1f))
+                    SectionSwitch(
+                        selected = section,
+                        palette = palette,
+                        onSelect = { section = it },
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(4.dp))
                     TextButton(onClick = onLock) {
                         Text(text = stringResource(R.string.vault_lock), color = palette.opBg, fontSize = 17.sp)
                     }
                 }
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .pinchToChangeColumns(::changeColumns),
-                ) {
-                    val list = entries
-                    when {
-                        damaged -> CenterNote(
-                            title = stringResource(R.string.vault_damaged),
-                            text = null,
-                            palette = palette,
-                        )
-                        list == null -> CircularProgressIndicator(
-                            color = palette.opBg,
-                            modifier = Modifier.align(Alignment.Center),
-                        )
-                        list.isEmpty() -> CenterNote(
-                            title = stringResource(R.string.vault_empty_title),
-                            text = stringResource(R.string.vault_empty_text),
-                            palette = palette,
-                        )
-                        else -> LazyVerticalGrid(
-                            columns = GridCells.Fixed(columns),
-                            state = gridState,
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            items(list, key = { it.id }) { entry ->
-                                VaultCell(
-                                    entry = entry,
-                                    palette = palette,
-                                    cache = thumbCache,
-                                    compact = columns >= 5,
-                                    loadThumbnail = {
-                                        try {
-                                            app.repository.readThumbnail(session, entry)
-                                        } catch (e: Exception) {
-                                            null
-                                        }
-                                    },
-                                    onClick = { openViewer(entry) },
-                                    onLongClick = { actionsFor = entry },
-                                )
+                if (section == Section.MEDIA) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .pinchToChangeColumns(::changeColumns),
+                    ) {
+                        val list = mediaEntries
+                        when {
+                            damaged -> CenterNote(
+                                title = stringResource(R.string.vault_damaged),
+                                text = null,
+                                palette = palette,
+                            )
+                            list == null -> CircularProgressIndicator(
+                                color = palette.opBg,
+                                modifier = Modifier.align(Alignment.Center),
+                            )
+                            list.isEmpty() -> CenterNote(
+                                title = stringResource(R.string.vault_empty_title),
+                                text = stringResource(R.string.vault_empty_text),
+                                palette = palette,
+                            )
+                            else -> LazyVerticalGrid(
+                                columns = GridCells.Fixed(columns),
+                                state = gridState,
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                items(list, key = { it.id }) { entry ->
+                                    VaultCell(
+                                        entry = entry,
+                                        palette = palette,
+                                        cache = thumbCache,
+                                        compact = columns >= 5,
+                                        loadThumbnail = {
+                                            try {
+                                                app.repository.readThumbnail(session, entry)
+                                            } catch (e: Exception) {
+                                                null
+                                            }
+                                        },
+                                        onClick = { openViewer(entry) },
+                                        onLongClick = { actionsFor = entry },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    ) {
+                        val list = fileEntries
+                        when {
+                            damaged -> CenterNote(
+                                title = stringResource(R.string.vault_damaged),
+                                text = null,
+                                palette = palette,
+                            )
+                            list == null -> CircularProgressIndicator(
+                                color = palette.opBg,
+                                modifier = Modifier.align(Alignment.Center),
+                            )
+                            list.isEmpty() -> CenterNote(
+                                title = stringResource(R.string.files_empty_title),
+                                text = stringResource(R.string.files_empty_text),
+                                palette = palette,
+                            )
+                            else -> LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(vertical = 4.dp),
+                            ) {
+                                items(list.size, key = { list[it].id }) { i ->
+                                    val entry = list[i]
+                                    FileRow(
+                                        entry = entry,
+                                        palette = palette,
+                                        cache = thumbCache,
+                                        loadThumbnail = {
+                                            try {
+                                                app.repository.readThumbnail(session, entry)
+                                            } catch (e: Exception) {
+                                                null
+                                            }
+                                        },
+                                        onClick = { openViewer(entry) },
+                                        onLongClick = { actionsFor = entry },
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
+                // Кнопки добавляют в тот раздел, который открыт.
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(8.dp),
                 ) {
-                    PrimaryButton(
-                        text = stringResource(R.string.vault_add_media),
-                        palette = palette,
-                        modifier = Modifier.weight(1f),
-                    ) { openMediaPicker() }
-                    Spacer(Modifier.width(8.dp))
-                    PrimaryButton(
-                        text = stringResource(R.string.vault_add_files),
-                        palette = palette,
-                        modifier = Modifier.weight(1f),
-                    ) { openDocsPicker() }
+                    if (section == Section.MEDIA) {
+                        PrimaryButton(
+                            text = stringResource(R.string.vault_add_media),
+                            palette = palette,
+                            modifier = Modifier.weight(1f),
+                        ) { openMediaPicker() }
+                    } else {
+                        PrimaryButton(
+                            text = stringResource(R.string.vault_add_files),
+                            palette = palette,
+                            modifier = Modifier.weight(1f),
+                        ) { openDocsPicker() }
+                        Spacer(Modifier.width(8.dp))
+                        PrimaryButton(
+                            text = stringResource(R.string.note_new),
+                            palette = palette,
+                            modifier = Modifier.weight(1f),
+                        ) { openNewNote() }
+                    }
                 }
             }
         }
@@ -707,6 +797,138 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                 }
             },
         )
+    }
+}
+
+/** Переключатель разделов «Фото и видео» | «Файлы». */
+@Composable
+private fun SectionSwitch(
+    selected: Section,
+    palette: CalcPalette,
+    onSelect: (Section) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .height(44.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(palette.digitBg)
+            .padding(4.dp),
+    ) {
+        SectionTab(
+            text = stringResource(R.string.section_media),
+            selected = selected == Section.MEDIA,
+            palette = palette,
+            modifier = Modifier.weight(1f),
+        ) { onSelect(Section.MEDIA) }
+        SectionTab(
+            text = stringResource(R.string.section_files),
+            selected = selected == Section.FILES,
+            palette = palette,
+            modifier = Modifier.weight(1f),
+        ) { onSelect(Section.FILES) }
+    }
+}
+
+@Composable
+private fun SectionTab(
+    text: String,
+    selected: Boolean,
+    palette: CalcPalette,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxHeight()
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (selected) palette.opBg else Color.Transparent)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            color = if (selected) palette.opText else palette.displaySecondary,
+            fontSize = 15.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+        )
+    }
+}
+
+/** Строка в списке «Файлы»: значок или первая страница PDF, имя, дата и размер. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FileRow(
+    entry: VaultEntry,
+    palette: CalcPalette,
+    cache: LruCache<String, ImageBitmap>,
+    loadThumbnail: () -> ByteArray?,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val info = remember(entry.id, entry.size) {
+        val time = if (entry.takenAt > 0) entry.takenAt else entry.addedAt
+        DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(time)) +
+            " · " + Formatter.formatShortFileSize(context, entry.size)
+    }
+    val bitmap by produceState<ImageBitmap?>(cache.get(entry.id), entry.id) {
+        if (value == null && entry.thumbId != null) {
+            val loaded = withContext(Dispatchers.IO) {
+                loadThumbnail()?.let { bytes ->
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                }
+            }
+            if (loaded != null) cache.put(entry.id, loaded)
+            value = loaded
+        }
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(palette.digitBg),
+            contentAlignment = Alignment.Center,
+        ) {
+            val bmp = bitmap
+            if (bmp != null) {
+                Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            } else {
+                Text(
+                    text = extensionLabel(entry),
+                    color = palette.opBg,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = entry.name,
+                color = palette.displayPrimary,
+                fontSize = 16.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = info,
+                color = palette.displaySecondary,
+                fontSize = 13.sp,
+                maxLines = 1,
+            )
+        }
     }
 }
 

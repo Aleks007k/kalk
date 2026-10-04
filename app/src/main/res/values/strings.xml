@@ -36,15 +36,15 @@
     <!-- Тайник -->
     <string name="vault_lock">Close</string>
     <string name="vault_empty_title">Nothing here yet</string>
-    <string name="vault_empty_text">Tap “Photos &amp; videos” or “Files” to hide files.</string>
+    <string name="vault_empty_text">Tap “+ Photos &amp; videos” to hide photos and videos.</string>
 
     <!-- Новый PIN после входа по коду восстановления -->
     <string name="newpin_title">Create a new PIN</string>
     <string name="newpin_saving">Saving…</string>
 
     <!-- Файлы в тайнике (этап 4) -->
-    <string name="vault_add_media">Photos &amp; videos</string>
-    <string name="vault_add_files">Files</string>
+    <string name="vault_add_media">+ Photos &amp; videos</string>
+    <string name="vault_add_files">+ Files</string>
     <string name="vault_damaged">Could not read the list of files in the vault.</string>
     <string name="vault_delete_title">Delete from the vault?</string>
     <string name="vault_delete_text">“%1$s” will be deleted forever. It cannot be restored.</string>
@@ -95,4 +95,10 @@
     <string name="note_default_name">Note %1$s</string>
     <string name="note_empty">Empty note</string>
     <string name="viewer_pdf_locked">This PDF is password-protected. You can still restore it with ⋮.</string>
+
+    <!-- Разделы тайника -->
+    <string name="section_media">Photos &amp; videos</string>
+    <string name="section_files">Files</string>
+    <string name="files_empty_title">No files yet</string>
+    <string name="files_empty_text">Documents and notes are kept here. Tap “+ Files” or “+ Note”.</string>
 </resources>
