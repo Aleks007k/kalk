@@ -28,7 +28,8 @@ data class ImportSummary(
 /** Добавление файлов в тайник: по одному, с проверкой каждого. */
 object Importer {
 
-    private const val THUMB_SIZE_PX = 320
+    /** Миниатюры крупные, чтобы и в две колонки сетка была чёткой. */
+    private const val THUMB_SIZE_PX = 512
 
     /** Фото и видео из галереи. [onProgress] вызывается в главном потоке. */
     suspend fun importMedia(
@@ -46,6 +47,7 @@ object Importer {
             size = item.size.takeIf { it > 0 },
             takenAt = item.takenAt,
             durationMs = item.durationMs,
+            origFolder = item.relativePath,
         )
         val result = MediaGallery.openOriginal(context, item.uri)?.use { input ->
             repository.importFile(session, input, meta, thumb)

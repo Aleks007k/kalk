@@ -7,8 +7,13 @@ import com.pocketcalc.calculator.crypto.VaultKeyManager
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
+import java.io.OutputStream
+import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.concurrent.CompletableFuture
+
+/** Размер куска при выгрузке файла из тайника. */
+private const val EXPORT_BUFFER = 64 * 1024
 
 /** Ячейка, в которой лежит тайник. Какая из них настоящая — нигде не записано. */
 enum class SlotPos { A, B }
@@ -23,6 +28,8 @@ data class ImportMeta(
     val takenAt: Long = 0,
     /** Длительность видео в мс, 0 — не видео или неизвестно. */
     val durationMs: Long = 0,
+    /** Папка, где лежал оригинал (например, "DCIM/Camera/"), пусто — неизвестно. */
+    val origFolder: String = "",
 )
 
 /** Результат добавления файла. */
@@ -209,6 +216,7 @@ class VaultRepository(
                     sha256 = stored.sha256,
                     takenAt = meta.takenAt,
                     durationMs = meta.durationMs,
+                    origFolder = meta.origFolder,
                 )
                 storage.saveIndex(key, index.add(entry))
                 ImportResult.Added(entry)
@@ -239,6 +247,33 @@ class VaultRepository(
      */
     fun openContent(session: VaultSession, entry: VaultEntry): InputStream =
         withKeyCopy(session) { key -> storage.openBlob(key, entry.blobId) }
+
+    /**
+     * Расшифровывает файл в [out] (например, в новый файл в Галерее) и проверяет
+     * его: размер и отпечаток SHA-256 должны совпасть с записанными при
+     * добавлении. Возвращает отпечаток записанного, чтобы вызывающий сверил с
+     * ним то, что легло на диск. При несовпадении бросает исключение — тогда
+     * файл из тайника удалять нельзя.
+     */
+    fun exportContent(session: VaultSession, entry: VaultEntry, out: OutputStream): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        var total = 0L
+        openContent(session, entry).use { input ->
+            val buf = ByteArray(EXPORT_BUFFER)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                digest.update(buf, 0, n)
+                out.write(buf, 0, n)
+                total += n
+            }
+        }
+        out.flush()
+        val sha = Sha256.hex(digest.digest())
+        check(total == entry.size) { "проверка не прошла: $total байт вместо ${entry.size}" }
+        check(entry.sha256.isEmpty() || sha == entry.sha256) { "проверка не прошла: отпечаток не совпал" }
+        return sha
+    }
 
     /**
      * Удаляет файл из тайника. Сначала запись исчезает из оглавления, потом

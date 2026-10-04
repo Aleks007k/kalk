@@ -10,6 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
 import java.security.MessageDigest
@@ -156,5 +157,74 @@ class VaultImportTest {
         }
         val names = repo.loadIndex(s)!!.entries.map { it.name }
         assertEquals((0 until 20).map { "p$it.jpg" }, names)
+    }
+
+    @Test fun importStoresOriginalFolder() {
+        val (repo, s, _) = newVault()
+        val entry = (repo.importFile(
+            s, ByteArrayInputStream(photo(20)),
+            ImportMeta("IMG_2.jpg", "image/jpeg", origFolder = "DCIM/Camera/"), null,
+        ) as ImportResult.Added).entry
+        assertEquals("DCIM/Camera/", entry.origFolder)
+        assertEquals("DCIM/Camera/", repo.loadIndex(s)!!.find(entry.id)!!.origFolder)
+    }
+
+    @Test fun exportWritesExactCopy() {
+        val (repo, s, _) = newVault()
+        val data = photo(21, size = 3 * 1024 * 1024 + 17)   // несколько кусков
+        val entry = (repo.importFile(s, ByteArrayInputStream(data), ImportMeta("v.mp4", "video/mp4"), null)
+            as ImportResult.Added).entry
+        val out = ByteArrayOutputStream()
+        val sha = repo.exportContent(s, entry, out)
+        assertArrayEquals(data, out.toByteArray())
+        assertEquals(sha256Hex(data), sha)
+    }
+
+    @Test fun exportDetectsDamagedFile() {
+        val (repo, s, dir) = newVault()
+        val entry = (repo.importFile(s, ByteArrayInputStream(photo(22)), ImportMeta("p.jpg", "image/jpeg"), null)
+            as ImportResult.Added).entry
+        val blob = File(File(dir, "blobs"), entry.blobId)
+        val bytes = blob.readBytes()
+        bytes[bytes.size / 2] = (bytes[bytes.size / 2].toInt() xor 1).toByte()
+        blob.writeBytes(bytes)
+        try {
+            repo.exportContent(s, entry, ByteArrayOutputStream())
+            fail("повреждённый файл не должен выгружаться как целый")
+        } catch (e: Exception) {
+            // ожидаемо: расшифровка или проверка не прошла
+        }
+    }
+
+    @Test fun exportChecksRecordedSizeAndHash() {
+        val (repo, s, _) = newVault()
+        val entry = (repo.importFile(s, ByteArrayInputStream(photo(23)), ImportMeta("p.jpg", "image/jpeg"), null)
+            as ImportResult.Added).entry
+        for (wrong in listOf(entry.copy(size = entry.size + 1), entry.copy(sha256 = "00".repeat(32)))) {
+            try {
+                repo.exportContent(s, wrong, ByteArrayOutputStream())
+                fail("несовпадение с оглавлением должно останавливать выгрузку")
+            } catch (e: IllegalStateException) {
+                // ожидаемо
+            }
+        }
+    }
+
+    @Test fun exportFromClosedVaultIsRefused() {
+        val (repo, s, _) = newVault()
+        val entry = (repo.importFile(s, ByteArrayInputStream(photo(24)), ImportMeta("p.jpg", "image/jpeg"), null)
+            as ImportResult.Added).entry
+        s.close()
+        try {
+            repo.exportContent(s, entry, ByteArrayOutputStream())
+            fail("из закрытого тайника выгружать нельзя")
+        } catch (e: IllegalStateException) {
+            // ожидаемо
+        }
+    }
+
+    @Test fun sha256HelperMatchesJdk() {
+        val data = photo(25, size = 200_000)
+        assertEquals(sha256Hex(data), Sha256.of(ByteArrayInputStream(data)))
     }
 }

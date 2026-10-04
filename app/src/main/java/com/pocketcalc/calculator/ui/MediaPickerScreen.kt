@@ -38,7 +38,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -54,10 +56,13 @@ import kotlinx.coroutines.withContext
 
 /**
  * Выбор фото и видео из памяти телефона: сетка миниатюр, нажатие отмечает,
- * «Спрятать» передаёт выбранное в тайник.
+ * «Спрятать» передаёт выбранное в тайник. Число колонок меняется щипком
+ * ([columns], [onColumnsStep]) — так же, как в самом тайнике.
  */
 @Composable
 fun MediaPickerScreen(
+    columns: Int,
+    onColumnsStep: (Int) -> Unit,
     onCancel: () -> Unit,
     onConfirm: (List<MediaItem>) -> Unit,
     onRequestMoreAccess: () -> Unit,
@@ -69,7 +74,10 @@ fun MediaPickerScreen(
     var mediaItems by remember { mutableStateOf<List<MediaItem>?>(null) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     val partial = remember { MediaGallery.isPartialAccess(context) }
-    val thumbCache = remember { LruCache<String, ImageBitmap>(300) }
+    val thumbCache = remember { thumbnailCache(32 * 1024 * 1024) }
+    // Миниатюра примерно в ширину плитки: чётко и без лишней памяти.
+    val screenWidthPx = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+    val thumbPx = (screenWidthPx / columns).toInt().coerceIn(128, 512)
 
     LaunchedEffect(Unit) {
         mediaItems = withContext(Dispatchers.IO) { MediaGallery.load(context) }
@@ -123,7 +131,12 @@ fun MediaPickerScreen(
             }
         }
 
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .pinchToChangeColumns(onColumnsStep),
+        ) {
             val list = mediaItems
             when {
                 list == null -> CircularProgressIndicator(
@@ -138,7 +151,7 @@ fun MediaPickerScreen(
                     modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 )
                 else -> LazyVerticalGrid(
-                    columns = GridCells.Adaptive(100.dp),
+                    columns = GridCells.Fixed(columns),
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(list, key = { it.uri.toString() }) { item ->
@@ -148,6 +161,7 @@ fun MediaPickerScreen(
                             isSelected = key in selected,
                             palette = palette,
                             cache = thumbCache,
+                            thumbPx = thumbPx,
                             onToggle = {
                                 selected = if (key in selected) selected - key else selected + key
                             },
@@ -181,16 +195,23 @@ private fun MediaCell(
     isSelected: Boolean,
     palette: CalcPalette,
     cache: LruCache<String, ImageBitmap>,
+    thumbPx: Int,
     onToggle: () -> Unit,
 ) {
     val context = LocalContext.current
-    val key = item.uri.toString()
+    val key = item.uri.toString() + "#" + thumbPx
+    // При смене числа колонок старая миниатюра видна, пока грузится новая.
     val bitmap by produceState<ImageBitmap?>(cache.get(key), key) {
-        if (value == null) {
-            val loaded = withContext(Dispatchers.IO) {
-                MediaGallery.systemThumbnail(context, item, 256)?.asImageBitmap()
-            }
-            if (loaded != null) cache.put(key, loaded)
+        val cached = cache.get(key)
+        if (cached != null) {
+            value = cached
+            return@produceState
+        }
+        val loaded = withContext(Dispatchers.IO) {
+            MediaGallery.systemThumbnail(context, item, thumbPx)?.asImageBitmap()
+        }
+        if (loaded != null) {
+            cache.put(key, loaded)
             value = loaded
         }
     }

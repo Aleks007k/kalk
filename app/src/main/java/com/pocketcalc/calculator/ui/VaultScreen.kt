@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -65,11 +66,13 @@ import com.pocketcalc.calculator.media.ImportSummary
 import com.pocketcalc.calculator.media.Importer
 import com.pocketcalc.calculator.media.MediaGallery
 import com.pocketcalc.calculator.media.MediaItem
+import com.pocketcalc.calculator.media.Restorer
 import com.pocketcalc.calculator.ui.theme.CalcPalette
 import com.pocketcalc.calculator.ui.theme.calcPalette
 import com.pocketcalc.calculator.vault.EntryKind
 import com.pocketcalc.calculator.vault.VaultEntry
 import com.pocketcalc.calculator.vault.VaultSession
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -79,10 +82,12 @@ private sealed interface VaultFlow {
     data object Browse : VaultFlow
     data object Picking : VaultFlow
     data class Importing(val done: Int, val total: Int) : VaultFlow
+    data object Restoring : VaultFlow
 }
 
 /**
  * Экран открытого тайника. Одинаков для настоящего и фальшивого тайника.
+ * Заголовка нет — со стороны экран похож на обычную галерею.
  * «Назад» и «Закрыть» запирают тайник.
  */
 @Composable
@@ -115,16 +120,27 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
     var docsDeleteFailed by remember { mutableStateOf(0) }
     var askDeleteDocs by remember { mutableStateOf<List<Uri>?>(null) }
     var showSummary by remember { mutableStateOf(false) }
+    var actionsFor by remember { mutableStateOf<VaultEntry?>(null) }
     var toDelete by remember { mutableStateOf<VaultEntry?>(null) }
     var noPermission by remember { mutableStateOf(false) }
 
-    val thumbCache = remember { LruCache<String, ImageBitmap>(200) }
+    var columns by remember { mutableIntStateOf(UiPrefs.gridColumns(context)) }
+    fun changeColumns(step: Int) {
+        val next = (columns + step).coerceIn(UiPrefs.MIN_COLUMNS, UiPrefs.MAX_COLUMNS)
+        if (next != columns) {
+            columns = next
+            UiPrefs.setGridColumns(context, next)
+        }
+    }
+
+    val thumbCache = remember { thumbnailCache(48 * 1024 * 1024) }
     val viewSoon = stringResource(R.string.vault_view_soon)
 
     BackHandler {
         when (flow) {
             is VaultFlow.Picking -> flow = VaultFlow.Browse
-            is VaultFlow.Importing -> Unit // во время шифрования «Назад» не прерывает
+            // во время шифрования или возврата «Назад» не прерывает работу
+            is VaultFlow.Importing, is VaultFlow.Restoring -> Unit
             is VaultFlow.Browse -> onLock()
         }
     }
@@ -225,6 +241,36 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
         }
     }
 
+    // --- Возврат файла из тайника в память телефона ---
+    fun restore(entry: VaultEntry) {
+        flow = VaultFlow.Restoring
+        view.keepScreenOn = true
+        scope.launch {
+            val message = try {
+                val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    Restorer.restore(context, app.repository, session, entry)
+                } else {
+                    throw UnsupportedOperationException("нужен Android 10 или новее")
+                }
+                if (result.removedFromVault) {
+                    context.getString(R.string.restore_done, result.folder)
+                } else {
+                    context.getString(R.string.restore_done_copy_kept, result.folder)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                context.getString(R.string.restore_failed)
+            } finally {
+                view.keepScreenOn = false
+                flow = VaultFlow.Browse
+                thumbCache.remove(entry.id)
+                reload++
+            }
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
     // --- Доступ к фото и видео ---
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -281,6 +327,8 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
         if (flow is VaultFlow.Picking) {
             key(pickerKey) {
                 MediaPickerScreen(
+                    columns = columns,
+                    onColumnsStep = ::changeColumns,
                     onCancel = { flow = VaultFlow.Browse },
                     onConfirm = { items -> importMedia(items) },
                     onRequestMoreAccess = { requestMediaAccess() },
@@ -299,12 +347,6 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                         .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = stringResource(R.string.vault_title),
-                        color = palette.displayPrimary,
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
                     Spacer(Modifier.weight(1f))
                     TextButton(onClick = onLock) {
                         Text(text = stringResource(R.string.vault_lock), color = palette.opBg, fontSize = 17.sp)
@@ -314,7 +356,8 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .pinchToChangeColumns(::changeColumns),
                 ) {
                     val list = entries
                     when {
@@ -333,7 +376,7 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                             palette = palette,
                         )
                         else -> LazyVerticalGrid(
-                            columns = GridCells.Adaptive(110.dp),
+                            columns = GridCells.Fixed(columns),
                             modifier = Modifier.fillMaxSize(),
                         ) {
                             items(list, key = { it.id }) { entry ->
@@ -341,6 +384,7 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                                     entry = entry,
                                     palette = palette,
                                     cache = thumbCache,
+                                    compact = columns >= 5,
                                     loadThumbnail = {
                                         try {
                                             app.repository.readThumbnail(session, entry)
@@ -351,7 +395,7 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                                     onClick = {
                                         Toast.makeText(context, viewSoon, Toast.LENGTH_SHORT).show()
                                     },
-                                    onLongClick = { toDelete = entry },
+                                    onLongClick = { actionsFor = entry },
                                 )
                             }
                         }
@@ -379,7 +423,7 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
         }
 
         val current = flow
-        if (current is VaultFlow.Importing) {
+        if (current is VaultFlow.Importing || current is VaultFlow.Restoring) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -391,7 +435,11 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                     CircularProgressIndicator(color = palette.opBg)
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        text = stringResource(R.string.import_progress, current.done, current.total),
+                        text = if (current is VaultFlow.Importing) {
+                            stringResource(R.string.import_progress, current.done, current.total)
+                        } else {
+                            stringResource(R.string.restore_progress)
+                        },
                         color = Color.White,
                         fontSize = 18.sp,
                     )
@@ -407,6 +455,35 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
     }
 
     // --- Диалоги ---
+
+    val acting = actionsFor
+    if (acting != null) {
+        AlertDialog(
+            onDismissRequest = { actionsFor = null },
+            title = {
+                Text(text = acting.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        DialogAction(text = stringResource(R.string.entry_restore), color = palette.opBg) {
+                            actionsFor = null
+                            restore(acting)
+                        }
+                    }
+                    DialogAction(text = stringResource(R.string.vault_delete_confirm), color = palette.error) {
+                        actionsFor = null
+                        toDelete = acting
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { actionsFor = null }) {
+                    Text(text = stringResource(R.string.dialog_cancel))
+                }
+            },
+        )
+    }
 
     val deleting = toDelete
     if (deleting != null) {
@@ -517,6 +594,21 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
     }
 }
 
+/** Строка-действие в диалоге: крупная, на всю ширину. */
+@Composable
+private fun DialogAction(text: String, color: Color, onClick: () -> Unit) {
+    Text(
+        text = text,
+        color = color,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp),
+    )
+}
+
 @Composable
 private fun CenterNote(title: String, text: String?, palette: CalcPalette) {
     Column(
@@ -540,6 +632,7 @@ private fun VaultCell(
     entry: VaultEntry,
     palette: CalcPalette,
     cache: LruCache<String, ImageBitmap>,
+    compact: Boolean,
     loadThumbnail: () -> ByteArray?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -582,18 +675,21 @@ private fun VaultCell(
                 Text(
                     text = extensionLabel(entry),
                     color = palette.opBg,
-                    fontSize = 20.sp,
+                    fontSize = if (compact) 14.sp else 20.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = entry.name,
-                    color = palette.displaySecondary,
-                    fontSize = 11.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                )
+                // В мелкой сетке имя не помещается — только тип файла.
+                if (!compact) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = entry.name,
+                        color = palette.displaySecondary,
+                        fontSize = 11.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
         }
         if (entry.kind == EntryKind.VIDEO && entry.durationMs > 0) {

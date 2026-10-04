@@ -34,7 +34,6 @@
     <string name="setup_done_ok">Зрозуміло</string>
 
     <!-- Сховище -->
-    <string name="vault_title">Сховище</string>
     <string name="vault_lock">Закрити</string>
     <string name="vault_empty_title">Поки порожньо</string>
     <string name="vault_empty_text">Натисніть «Фото й відео» або «Файли», щоб сховати файли.</string>
@@ -73,4 +72,11 @@
     <string name="docs_delete_confirm">Видалити</string>
     <string name="docs_delete_keep">Залишити</string>
     <string name="docs_delete_failed">Не вдалося видалити: %1$d — видаліть їх вручну.</string>
+
+    <!-- Возврат файла из тайника -->
+    <string name="entry_restore">Відновити</string>
+    <string name="restore_progress">Повертаю файл…</string>
+    <string name="restore_done">Повернуто до папки %1$s</string>
+    <string name="restore_done_copy_kept">Повернуто до папки %1$s. Копія лишилася й тут.</string>
+    <string name="restore_failed">Не вдалося повернути файл. Він лишився тут.</string>
 </resources>

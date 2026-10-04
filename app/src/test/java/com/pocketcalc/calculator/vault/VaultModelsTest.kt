@@ -101,6 +101,38 @@ class VaultModelsTest {
         assertEquals(61_000L, back.durationMs)
     }
 
+    @Test fun version3FolderRoundTrip() {
+        val e = entry(11).copy(origFolder = "DCIM/Camera/")
+        val back = roundTrip(VaultIndex.empty().add(e)).find("id11")!!
+        assertEquals("DCIM/Camera/", back.origFolder)
+    }
+
+    @Test fun readsVersion2Index() {
+        // Оглавление версии 2 (как у тайника из версии 0.4.0) читается без потерь,
+        // а исходная папка у таких записей неизвестна.
+        val bos = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(bos).use { out ->
+            out.writeInt(2)            // версия
+            out.writeInt(1)            // одна запись
+            out.writeUTF("id1")
+            out.writeUTF("IMG_1.jpg")
+            out.writeUTF("image/jpeg")
+            out.writeInt(EntryKind.PHOTO.ordinal)
+            out.writeLong(123)
+            out.writeLong(456)
+            out.writeUTF("blob1")
+            out.writeBoolean(false)
+            out.writeUTF("cd".repeat(32))
+            out.writeLong(1_700_000_000_000L)
+            out.writeLong(0)
+        }
+        val e = VaultIndex.deserialize(bos.toByteArray()).find("id1")!!
+        assertEquals("IMG_1.jpg", e.name)
+        assertEquals("cd".repeat(32), e.sha256)
+        assertEquals(1_700_000_000_000L, e.takenAt)
+        assertEquals("", e.origFolder)
+    }
+
     @Test fun findBySha256() {
         val idx = VaultIndex.empty()
             .add(entry(1).copy(sha256 = "aa"))

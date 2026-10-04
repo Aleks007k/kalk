@@ -34,7 +34,6 @@
     <string name="setup_done_ok">Понятно</string>
 
     <!-- Тайник -->
-    <string name="vault_title">Тайник</string>
     <string name="vault_lock">Закрыть</string>
     <string name="vault_empty_title">Пока пусто</string>
     <string name="vault_empty_text">Нажмите «Фото и видео» или «Файлы», чтобы спрятать файлы.</string>
@@ -73,4 +72,11 @@
     <string name="docs_delete_confirm">Удалить</string>
     <string name="docs_delete_keep">Оставить</string>
     <string name="docs_delete_failed">Не удалось удалить: %1$d — удалите их вручную.</string>
+
+    <!-- Возврат файла из тайника -->
+    <string name="entry_restore">Восстановить</string>
+    <string name="restore_progress">Возвращаю файл…</string>
+    <string name="restore_done">Возвращено в папку %1$s</string>
+    <string name="restore_done_copy_kept">Возвращено в папку %1$s. Копия осталась и здесь.</string>
+    <string name="restore_failed">Не удалось вернуть файл. Он остался здесь.</string>
 </resources>

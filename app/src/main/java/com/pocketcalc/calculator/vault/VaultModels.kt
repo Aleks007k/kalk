@@ -32,6 +32,9 @@ enum class EntryKind {
  *
  * [sha256] — отпечаток содержимого: по нему тайник узнаёт уже добавленный
  * файл и не добавляет его второй раз. У записей старого формата он пустой.
+ *
+ * [origFolder] — папка, где лежал оригинал (например, `DCIM/Camera/`): туда
+ * файл возвращается при восстановлении. Пусто — неизвестно.
  */
 data class VaultEntry(
     val id: String,
@@ -45,6 +48,7 @@ data class VaultEntry(
     val sha256: String = "",
     val takenAt: Long = 0,
     val durationMs: Long = 0,
+    val origFolder: String = "",
 )
 
 /** Оглавление одного тайника: список записей. */
@@ -64,10 +68,11 @@ data class VaultIndex(val entries: List<VaultEntry>) {
         /**
          * Версии формата:
          *  1 — первая (этап 2–3);
-         *  2 — добавлены отпечаток содержимого, дата съёмки и длительность видео.
+         *  2 — добавлены отпечаток содержимого, дата съёмки и длительность видео;
+         *  3 — добавлена исходная папка файла (для восстановления).
          * Старые версии читаются всегда: обновление приложения не должно ломать тайник.
          */
-        private const val VERSION = 2
+        private const val VERSION = 3
 
         fun empty(): VaultIndex = VaultIndex(emptyList())
 
@@ -91,12 +96,14 @@ data class VaultIndex(val entries: List<VaultEntry>) {
                     out.writeUTF(e.sha256)
                     out.writeLong(e.takenAt)
                     out.writeLong(e.durationMs)
+                    // версия 3
+                    out.writeUTF(e.origFolder)
                 }
             }
             return bos.toByteArray()
         }
 
-        /** Восстанавливает оглавление из байтов (после расшифровки). Понимает версии 1 и 2. */
+        /** Восстанавливает оглавление из байтов (после расшифровки). Понимает версии 1–3. */
         fun deserialize(bytes: ByteArray): VaultIndex {
             DataInputStream(ByteArrayInputStream(bytes)).use { input ->
                 val version = input.readInt()
@@ -121,10 +128,11 @@ data class VaultIndex(val entries: List<VaultEntry>) {
                         takenAt = input.readLong()
                         durationMs = input.readLong()
                     }
+                    val origFolder = if (version >= 3) input.readUTF() else ""
                     list.add(
                         VaultEntry(
                             id, name, mime, kind, size, addedAt, blobId, thumbId,
-                            sha256, takenAt, durationMs,
+                            sha256, takenAt, durationMs, origFolder,
                         )
                     )
                 }

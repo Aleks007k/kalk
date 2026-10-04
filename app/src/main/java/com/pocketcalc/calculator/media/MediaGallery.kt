@@ -25,6 +25,8 @@ data class MediaItem(
     val takenAt: Long,
     val durationMs: Long,
     val isVideo: Boolean,
+    /** Папка в памяти телефона, например "DCIM/Camera/" (Android 10+), иначе пусто. */
+    val relativePath: String = "",
 )
 
 /** Документ, выбранный в системном окне выбора файлов. */
@@ -100,6 +102,8 @@ object MediaGallery {
             COLUMN_DATE_TAKEN,
         )
         if (isVideo) projection += COLUMN_DURATION
+        val withPath = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+        if (withPath) projection += MediaStore.MediaColumns.RELATIVE_PATH
         val result = ArrayList<MediaItem>()
         try {
             context.contentResolver.query(collection, projection.toTypedArray(), null, null, null)?.use { c ->
@@ -110,6 +114,7 @@ object MediaGallery {
                 val addedCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_ADDED)
                 val takenCol = c.getColumnIndex(COLUMN_DATE_TAKEN)
                 val durCol = if (isVideo) c.getColumnIndex(COLUMN_DURATION) else -1
+                val pathCol = if (withPath) c.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH) else -1
                 while (c.moveToNext()) {
                     val id = c.getLong(idCol)
                     val added = c.getLong(addedCol) * 1000
@@ -123,6 +128,7 @@ object MediaGallery {
                         takenAt = if (taken > 0) taken else added,
                         durationMs = if (durCol >= 0 && !c.isNull(durCol)) c.getLong(durCol) else 0L,
                         isVideo = isVideo,
+                        relativePath = if (pathCol >= 0 && !c.isNull(pathCol)) c.getString(pathCol) else "",
                     )
                 }
             }

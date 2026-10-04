@@ -34,7 +34,6 @@
     <string name="setup_done_ok">Got it</string>
 
     <!-- Тайник -->
-    <string name="vault_title">Vault</string>
     <string name="vault_lock">Close</string>
     <string name="vault_empty_title">Nothing here yet</string>
     <string name="vault_empty_text">Tap “Photos &amp; videos” or “Files” to hide files.</string>
@@ -73,4 +72,11 @@
     <string name="docs_delete_confirm">Delete</string>
     <string name="docs_delete_keep">Keep</string>
     <string name="docs_delete_failed">Could not delete: %1$d — please delete them manually.</string>
+
+    <!-- Возврат файла из тайника -->
+    <string name="entry_restore">Restore</string>
+    <string name="restore_progress">Restoring the file…</string>
+    <string name="restore_done">Restored to the folder %1$s</string>
+    <string name="restore_done_copy_kept">Restored to the folder %1$s. A copy also stayed here.</string>
+    <string name="restore_failed">Could not restore the file. It is still here.</string>
 </resources>
