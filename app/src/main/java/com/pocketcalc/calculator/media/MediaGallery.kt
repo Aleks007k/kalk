@@ -13,6 +13,7 @@ import android.provider.OpenableColumns
 import android.util.Size
 import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
 
 /** Фото или видео из памяти телефона (галерея). */
 data class MediaItem(
@@ -40,16 +41,26 @@ object MediaGallery {
     private const val COLUMN_DATE_TAKEN = "datetaken"
     private const val COLUMN_DURATION = "duration"
 
-    /** Разрешения, которые нужно запросить для доступа к фото и видео. */
+    /**
+     * Разрешения, которые нужно запросить для доступа к фото и видео.
+     * ACCESS_MEDIA_LOCATION просим вместе с остальными (одно окно): без него
+     * Android отдаёт фото и видео с вырезанной геометкой.
+     */
     fun permissionsToRequest(): Array<String> = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> arrayOf(
             Manifest.permission.READ_MEDIA_IMAGES,
             Manifest.permission.READ_MEDIA_VIDEO,
             Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
+            Manifest.permission.ACCESS_MEDIA_LOCATION,
         )
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> arrayOf(
             Manifest.permission.READ_MEDIA_IMAGES,
             Manifest.permission.READ_MEDIA_VIDEO,
+            Manifest.permission.ACCESS_MEDIA_LOCATION,
+        )
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> arrayOf(
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.ACCESS_MEDIA_LOCATION,
         )
         else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
@@ -119,6 +130,30 @@ object MediaGallery {
             // Доступа нет — просто пустой список.
         }
         return result
+    }
+
+    /**
+     * Открывает фото или видео для чтения в точности как оно лежит в памяти.
+     *
+     * Без особого запроса Android вырезает из файла геометку (место съёмки),
+     * когда его читает другое приложение. С разрешением ACCESS_MEDIA_LOCATION
+     * и [MediaStore.setRequireOriginal] система отдаёт файл без изменений.
+     * Если так открыть не вышло — читаем как обычно (файл без геометки),
+     * чтобы добавление всё равно работало.
+     */
+    fun openOriginal(context: Context, uri: Uri): InputStream? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            granted(context, Manifest.permission.ACCESS_MEDIA_LOCATION)
+        ) {
+            try {
+                return context.contentResolver.openInputStream(MediaStore.setRequireOriginal(uri))
+            } catch (e: SecurityException) {
+                // ниже — обычное чтение
+            } catch (e: UnsupportedOperationException) {
+                // ниже — обычное чтение
+            }
+        }
+        return context.contentResolver.openInputStream(uri)
     }
 
     /** Миниатюра фото/видео из системы (для сетки выбора и для тайника). */

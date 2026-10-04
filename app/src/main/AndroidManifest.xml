@@ -9,10 +9,15 @@
       Единственное разрешение — доступ к фото и видео, чтобы прятать их из
       галереи. Его приложение запрашивает только изнутри тайника, при первом
       добавлении файлов, и никогда — с экрана калькулятора.
+
+      ACCESS_MEDIA_LOCATION входит в то же разрешение «Фото и видео» (отдельного
+      окна нет). Без него Android вырезает из фото геометку, и в тайник попала
+      бы неточная копия.
     -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
     <!-- Android 12 и старше: старое общее разрешение на чтение. -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"

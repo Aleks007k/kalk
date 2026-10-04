@@ -47,7 +47,7 @@ object Importer {
             takenAt = item.takenAt,
             durationMs = item.durationMs,
         )
-        val result = context.contentResolver.openInputStream(item.uri)?.use { input ->
+        val result = MediaGallery.openOriginal(context, item.uri)?.use { input ->
             repository.importFile(session, input, meta, thumb)
         } ?: throw IOException("не удалось открыть файл")
         result to item.uri
