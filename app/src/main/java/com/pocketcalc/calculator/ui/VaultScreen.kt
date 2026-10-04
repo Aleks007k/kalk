@@ -71,12 +71,22 @@ import com.pocketcalc.calculator.media.Restorer
 import com.pocketcalc.calculator.ui.theme.CalcPalette
 import com.pocketcalc.calculator.ui.theme.calcPalette
 import com.pocketcalc.calculator.vault.EntryKind
+import com.pocketcalc.calculator.vault.ImportMeta
+import com.pocketcalc.calculator.vault.ImportResult
+import com.pocketcalc.calculator.vault.TextCodec
 import com.pocketcalc.calculator.vault.VaultEntry
 import com.pocketcalc.calculator.vault.VaultSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/** Заметка, открытая в редакторе. [token] отличает одно открытие от другого. */
+private data class NoteEdit(val title: String, val text: String, val token: Long = System.nanoTime())
 
 /** Что сейчас происходит на экране тайника. */
 private sealed interface VaultFlow {
@@ -122,6 +132,10 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
     var askDeleteDocs by remember { mutableStateOf<List<Uri>?>(null) }
     var showSummary by remember { mutableStateOf(false) }
     var actionsFor by remember { mutableStateOf<VaultEntry?>(null) }
+    /** Открытая в редакторе заметка (null — редактор закрыт). */
+    var editing by remember { mutableStateOf<NoteEdit?>(null) }
+    /** Запись редактируемой заметки; null — новая, ещё ни разу не сохранённая. */
+    var editingNoteId by remember { mutableStateOf<String?>(null) }
     /** Открытый на весь экран файл (null — показана сетка). */
     var viewingId by remember { mutableStateOf<String?>(null) }
     val gridState = rememberLazyGridState()
@@ -260,6 +274,51 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
         }
     }
 
+    // --- Заметки ---
+    val defaultNoteName = stringResource(
+        R.string.note_default_name,
+        SimpleDateFormat("dd.MM.yyyy HH-mm", Locale.getDefault()).format(Date()),
+    )
+
+    fun openNewNote() {
+        editingNoteId = null
+        editing = NoteEdit(title = defaultNoteName, text = "")
+    }
+
+    /**
+     * Шифрует и записывает текст заметки. Новая заметка появляется в тайнике
+     * при первом сохранении (пустая — не создаётся), дальше её содержимое
+     * заменяется. Возвращает false, если записать не удалось.
+     */
+    suspend fun saveNote(text: String): Boolean {
+        val id = editingNoteId
+        return try {
+            val savedId = withContext(Dispatchers.IO) {
+                val bytes = TextCodec.encode(text)
+                if (id == null) {
+                    if (text.isBlank()) return@withContext null
+                    val name = (TextCodec.titleOf(text) ?: defaultNoteName) + ".txt"
+                    val meta = ImportMeta(name = name, mime = "text/plain", size = bytes.size.toLong())
+                    val result = app.repository.importFile(
+                        session, ByteArrayInputStream(bytes), meta, thumbnailJpeg = null, dedupe = false,
+                    )
+                    (result as ImportResult.Added).entry.id
+                } else {
+                    app.repository.replaceContent(session, id, ByteArrayInputStream(bytes), bytes.size.toLong()).id
+                }
+            }
+            if (savedId != null) {
+                editingNoteId = savedId
+                reload++
+            }
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     // --- Возврат файла из тайника в память телефона ---
     fun restore(entry: VaultEntry) {
         flow = VaultFlow.Restoring
@@ -364,8 +423,13 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                 thumbCache = thumbCache,
                 // Пока идёт возврат файла, «Назад» не закрывает просмотр.
                 canClose = flow is VaultFlow.Browse,
+                docTmpDir = app.docTmpDir,
                 onClose = ::closeViewer,
                 onActions = { entry -> actionsFor = entry },
+                onEditNote = { entry, text ->
+                    editingNoteId = entry.id
+                    editing = NoteEdit(title = entry.name, text = text)
+                },
             )
         } else {
             Column(
@@ -380,6 +444,9 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                         .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    TextButton(onClick = { openNewNote() }) {
+                        Text(text = stringResource(R.string.note_new), color = palette.opBg, fontSize = 17.sp)
+                    }
                     Spacer(Modifier.weight(1f))
                     TextButton(onClick = onLock) {
                         Text(text = stringResource(R.string.vault_lock), color = palette.opBg, fontSize = 17.sp)
@@ -451,6 +518,23 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                         modifier = Modifier.weight(1f),
                     ) { openDocsPicker() }
                 }
+            }
+        }
+
+        // Редактор заметки — поверх сетки или просмотра (их состояние сохраняется).
+        val edit = editing
+        if (edit != null) {
+            key(edit.token) {
+                NoteEditorScreen(
+                    title = edit.title,
+                    initialText = edit.text,
+                    palette = palette,
+                    onSave = { text -> saveNote(text) },
+                    onClose = {
+                        editing = null
+                        editingNoteId = null
+                    },
+                )
             }
         }
 
@@ -723,6 +807,20 @@ private fun VaultCell(
                     )
                 }
             }
+        }
+        if (bmp != null && entry.kind != EntryKind.PHOTO && entry.kind != EntryKind.VIDEO) {
+            // У документа с миниатюрой (первая страница PDF) — подпись типа.
+            Text(
+                text = extensionLabel(entry),
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(4.dp)
+                    .background(Color(0xCC3B74FF))
+                    .padding(horizontal = 4.dp),
+            )
         }
         if (entry.kind == EntryKind.VIDEO && entry.durationMs > 0) {
             Text(

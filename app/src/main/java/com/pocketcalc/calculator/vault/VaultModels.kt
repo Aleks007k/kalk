@@ -58,6 +58,9 @@ data class VaultIndex(val entries: List<VaultEntry>) {
 
     fun remove(entryId: String): VaultIndex = VaultIndex(entries.filterNot { it.id == entryId })
 
+    /** Та же запись (по id) с новыми данными; порядок записей не меняется. */
+    fun replace(entry: VaultEntry): VaultIndex = VaultIndex(entries.map { if (it.id == entry.id) entry else it })
+
     fun find(entryId: String): VaultEntry? = entries.firstOrNull { it.id == entryId }
 
     /** Запись с таким же содержимым, если она уже есть. */

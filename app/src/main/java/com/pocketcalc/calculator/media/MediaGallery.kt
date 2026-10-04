@@ -5,6 +5,8 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Build
 import android.provider.BaseColumns
@@ -182,14 +184,49 @@ object MediaGallery {
         null
     }
 
-    /** Миниатюра документа, если система умеет её сделать (фото/видео), иначе null. */
+    /** Миниатюра документа: первая страница PDF, кадр фото/видео; иначе null. */
     fun documentThumbnail(context: Context, doc: DocumentInfo, sizePx: Int): Bitmap? {
+        if (doc.mime == "application/pdf") return pdfThumbnail(context, doc.uri, sizePx)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
         if (!doc.mime.startsWith("image/") && !doc.mime.startsWith("video/")) return null
         return try {
             context.contentResolver.loadThumbnail(doc.uri, Size(sizePx, sizePx), null)
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /** Первая страница PDF на белом фоне (защищённые паролем PDF — null). */
+    private fun pdfThumbnail(context: Context, uri: Uri, sizePx: Int): Bitmap? {
+        val descriptor = try {
+            context.contentResolver.openFileDescriptor(uri, "r")
+        } catch (e: Exception) {
+            null
+        } ?: return null
+        val renderer = try {
+            PdfRenderer(descriptor)
+        } catch (e: Exception) {
+            descriptor.close()
+            return null
+        }
+        return try {
+            if (renderer.pageCount == 0) return null
+            val page = renderer.openPage(0)
+            try {
+                val scale = sizePx.toFloat() / maxOf(page.width, page.height)
+                val width = (page.width * scale).toInt().coerceAtLeast(1)
+                val height = (page.height * scale).toInt().coerceAtLeast(1)
+                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                bitmap.eraseColor(Color.WHITE)
+                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                bitmap
+            } finally {
+                page.close()
+            }
+        } catch (e: Exception) {
+            null
+        } finally {
+            renderer.close()
         }
     }
 

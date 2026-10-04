@@ -194,13 +194,15 @@ class VaultRepository(
         input: InputStream,
         meta: ImportMeta,
         thumbnailJpeg: ByteArray?,
+        /** false — не искать такой же файл в тайнике (новая заметка — всегда новая запись). */
+        dedupe: Boolean = true,
     ): ImportResult = withKeyCopy(session) { key ->
         val stored = storage.storeBlob(key, input, meta.size)
         var thumbId: String? = null
         try {
             synchronized(indexLock) {
                 val index = storage.loadIndex(key) ?: error("оглавление повреждено")
-                val existing = index.findBySha256(stored.sha256)
+                val existing = if (dedupe) index.findBySha256(stored.sha256) else null
                 if (existing != null) {
                     storage.deleteBlob(stored.id)
                     return@withKeyCopy ImportResult.AlreadyThere(existing)
@@ -229,6 +231,37 @@ class VaultRepository(
             thumbId?.let { storage.deleteBlob(it) }
             throw e
         }
+    }
+
+    /**
+     * Заменяет содержимое файла (например, после правки заметки). Новое
+     * содержимое шифруется и проверяется так же, как при добавлении; запись
+     * в оглавлении сохраняет id, имя и даты. Старый зашифрованный файл
+     * удаляется только после того, как оглавление сохранено.
+     */
+    fun replaceContent(
+        session: VaultSession,
+        entryId: String,
+        input: InputStream,
+        expectedSize: Long? = null,
+    ): VaultEntry = withKeyCopy(session) { key ->
+        val stored = storage.storeBlob(key, input, expectedSize)
+        val (updated, oldBlobId) = try {
+            synchronized(indexLock) {
+                val index = storage.loadIndex(key) ?: error("оглавление повреждено")
+                val old = index.find(entryId) ?: error("файл не найден в тайнике")
+                val updated = old.copy(size = stored.size, blobId = stored.id, sha256 = stored.sha256)
+                storage.saveIndex(key, index.replace(updated))
+                updated to old.blobId
+            }
+        } catch (e: Exception) {
+            // Оглавление не изменилось — новый зашифрованный файл не нужен.
+            storage.deleteBlob(stored.id)
+            throw e
+        }
+        // Сбой здесь оставит лишь бесполезный зашифрованный «мусор».
+        storage.deleteBlob(oldBlobId)
+        updated
     }
 
     /** Миниатюра записи (JPEG) или null, если её нет. */

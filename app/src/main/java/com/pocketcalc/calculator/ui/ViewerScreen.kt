@@ -77,6 +77,7 @@ import me.saket.telephoto.zoomable.ZoomSpec
 import me.saket.telephoto.zoomable.ZoomableContentLocation
 import me.saket.telephoto.zoomable.rememberZoomableState
 import me.saket.telephoto.zoomable.zoomable
+import java.io.File
 import java.text.DateFormat
 import java.util.Date
 import java.util.concurrent.Executors
@@ -102,9 +103,13 @@ fun ViewerScreen(
     repository: VaultRepository,
     session: VaultSession,
     thumbCache: LruCache<String, ImageBitmap>,
+    /** Папка для запасного пути показа PDF на старых Android (см. VaultPdf). */
+    docTmpDir: File,
     canClose: Boolean,
     onClose: (lastEntryId: String?) -> Unit,
     onActions: (VaultEntry) -> Unit,
+    /** «Изменить» у заметки: запись и её уже прочитанный текст. */
+    onEditNote: (VaultEntry, String) -> Unit,
 ) {
     val startIndex = remember { entries.indexOfFirst { it.id == startEntryId }.coerceAtLeast(0) }
     val pagerState = rememberPagerState(initialPage = startIndex) { entries.size }
@@ -144,7 +149,21 @@ fun ViewerScreen(
                     onTap = toggleChrome,
                     onChromeVisible = { chromeVisible = it },
                 )
-                else -> FilePage(entry, onTap = toggleChrome)
+                EntryKind.PDF -> PdfPage(
+                    entry = entry,
+                    repository = repository,
+                    session = session,
+                    tmpDir = docTmpDir,
+                    chromeVisible = chromeVisible,
+                    onTap = toggleChrome,
+                )
+                EntryKind.NOTE -> NotePage(
+                    entry = entry,
+                    repository = repository,
+                    session = session,
+                    onEdit = { text -> onEditNote(entry, text) },
+                )
+                EntryKind.OTHER -> FilePage(entry, onTap = toggleChrome)
             }
         }
 
@@ -253,18 +272,19 @@ private fun ZoomablePhoto(image: DecodedImage, onTap: () -> Unit) {
 
 // --- Прочие файлы и сообщения -------------------------------------------
 
+/** Файлы, которые нельзя посмотреть (архивы, документы Word и т.п.): только тип и имя. */
 @Composable
 private fun FilePage(entry: VaultEntry, onTap: () -> Unit) {
-    val note = if (entry.kind == EntryKind.PDF || entry.kind == EntryKind.NOTE) {
-        R.string.viewer_soon
-    } else {
-        R.string.viewer_other
-    }
-    InfoPage(title = extensionLabel(entry), subtitle = entry.name, text = stringResource(note), onTap = onTap)
+    InfoPage(
+        title = extensionLabel(entry),
+        subtitle = entry.name,
+        text = stringResource(R.string.viewer_other),
+        onTap = onTap,
+    )
 }
 
 @Composable
-private fun InfoPage(title: String?, subtitle: String?, text: String, onTap: () -> Unit) {
+internal fun InfoPage(title: String?, subtitle: String?, text: String, onTap: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -286,7 +306,7 @@ private fun InfoPage(title: String?, subtitle: String?, text: String, onTap: () 
 }
 
 @Composable
-private fun LoadingPage(placeholder: ImageBitmap?, onTap: () -> Unit) {
+internal fun LoadingPage(placeholder: ImageBitmap?, onTap: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()

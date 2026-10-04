@@ -83,6 +83,16 @@
     <string name="viewer_too_big">Файл завеликий для перегляду. Його можна відновити через ⋮.</string>
     <string name="viewer_cant_show">Не вдалося показати цей файл. Його можна відновити через ⋮.</string>
     <string name="viewer_video_failed">Не вдалося відтворити відео. Його можна відновити через ⋮.</string>
-    <string name="viewer_soon">Перегляд PDF і нотаток з’явиться в наступній версії.</string>
     <string name="viewer_other">Такі файли можна зберігати тут і повертати в телефон.</string>
+
+    <!-- Заметки и PDF -->
+    <string name="note_new">+ Нотатка</string>
+    <string name="note_edit">Змінити</string>
+    <string name="note_saving">Зберігаю…</string>
+    <string name="note_saved">Збережено</string>
+    <string name="note_save_failed">Не вдалося зберегти</string>
+    <string name="note_hint">Текст нотатки</string>
+    <string name="note_default_name">Нотатка %1$s</string>
+    <string name="note_empty">Порожня нотатка</string>
+    <string name="viewer_pdf_locked">PDF захищено паролем. Його можна відновити через ⋮.</string>
 </resources>

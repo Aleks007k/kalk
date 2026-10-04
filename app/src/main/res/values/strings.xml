@@ -83,6 +83,16 @@
     <string name="viewer_too_big">This file is too big to view here. You can still restore it with ⋮.</string>
     <string name="viewer_cant_show">Could not show this file. You can still restore it with ⋮.</string>
     <string name="viewer_video_failed">Could not play this video. You can still restore it with ⋮.</string>
-    <string name="viewer_soon">Viewing PDFs and notes will come in the next version.</string>
     <string name="viewer_other">Files like this can be kept here and restored to the phone.</string>
+
+    <!-- Заметки и PDF -->
+    <string name="note_new">+ Note</string>
+    <string name="note_edit">Edit</string>
+    <string name="note_saving">Saving…</string>
+    <string name="note_saved">Saved</string>
+    <string name="note_save_failed">Could not save</string>
+    <string name="note_hint">Note text</string>
+    <string name="note_default_name">Note %1$s</string>
+    <string name="note_empty">Empty note</string>
+    <string name="viewer_pdf_locked">This PDF is password-protected. You can still restore it with ⋮.</string>
 </resources>

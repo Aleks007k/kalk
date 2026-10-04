@@ -285,4 +285,55 @@ class VaultImportTest {
             // ожидаемо
         }
     }
+
+    @Test fun replaceContentKeepsEntryAndSwapsData() {
+        val (repo, s, dir) = newVault()
+        val first = "первая версия".toByteArray()
+        val entry = (repo.importFile(s, ByteArrayInputStream(first), ImportMeta("заметка.txt", "text/plain"), null)
+            as ImportResult.Added).entry
+        val second = "вторая, более длинная версия заметки".toByteArray()
+        val updated = repo.replaceContent(s, entry.id, ByteArrayInputStream(second), second.size.toLong())
+        assertEquals(entry.id, updated.id)
+        assertEquals("заметка.txt", updated.name)
+        assertEquals(second.size.toLong(), updated.size)
+        assertEquals(sha256Hex(second), updated.sha256)
+        assertArrayEquals(second, repo.openContent(s, updated).use { it.readBytes() })
+        assertEquals("старый зашифрованный файл удалён", 1, blobCount(dir))
+        assertEquals(1, repo.loadIndex(s)!!.entries.size)
+    }
+
+    @Test fun replaceContentOfUnknownEntryLeavesNothing() {
+        val (repo, s, dir) = newVault()
+        repo.importFile(s, ByteArrayInputStream(photo(40)), ImportMeta("p.jpg", "image/jpeg"), null)
+        try {
+            repo.replaceContent(s, "нет-такого", ByteArrayInputStream(photo(41)))
+            fail("замена несуществующей записи должна отменяться")
+        } catch (e: IllegalStateException) {
+            // ожидаемо
+        }
+        assertEquals("лишний зашифрованный файл не остался", 1, blobCount(dir))
+    }
+
+    @Test fun replaceContentInClosedVaultIsRefused() {
+        val (repo, s, _) = newVault()
+        val entry = (repo.importFile(s, ByteArrayInputStream(photo(42)), ImportMeta("n.txt", "text/plain"), null)
+            as ImportResult.Added).entry
+        s.close()
+        try {
+            repo.replaceContent(s, entry.id, ByteArrayInputStream(photo(43)))
+            fail("в закрытом тайнике менять нельзя")
+        } catch (e: IllegalStateException) {
+            // ожидаемо
+        }
+    }
+
+    @Test fun importWithoutDedupeCreatesNewEntry() {
+        val (repo, s, _) = newVault()
+        val empty = ByteArray(0)
+        val a = repo.importFile(s, ByteArrayInputStream(empty), ImportMeta("a.txt", "text/plain"), null, dedupe = false)
+        val b = repo.importFile(s, ByteArrayInputStream(empty), ImportMeta("b.txt", "text/plain"), null, dedupe = false)
+        assertTrue(a is ImportResult.Added)
+        assertTrue(b is ImportResult.Added)
+        assertEquals(2, repo.loadIndex(s)!!.entries.size)
+    }
 }

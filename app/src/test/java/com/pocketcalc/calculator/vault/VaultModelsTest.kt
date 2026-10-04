@@ -133,6 +133,14 @@ class VaultModelsTest {
         assertEquals("", e.origFolder)
     }
 
+    @Test fun replaceKeepsOrder() {
+        val idx = VaultIndex.empty().add(entry(1)).add(entry(2)).add(entry(3))
+        val replaced = idx.replace(entry(2).copy(name = "новое.jpg", size = 99))
+        assertEquals(listOf("id1", "id2", "id3"), replaced.entries.map { it.id })
+        assertEquals("новое.jpg", replaced.find("id2")!!.name)
+        assertEquals(99L, replaced.find("id2")!!.size)
+    }
+
     @Test fun findBySha256() {
         val idx = VaultIndex.empty()
             .add(entry(1).copy(sha256 = "aa"))
