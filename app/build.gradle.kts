@@ -12,8 +12,8 @@ android {
         applicationId = "com.pocketcalc.calculator"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.6.0"
+        versionCode = 7
+        versionName = "0.6.1"
     }
 
     // Подпись релиза.
@@ -90,9 +90,9 @@ dependencies {
     implementation(libs.tink)
     implementation(libs.bouncycastle)
 
-    // Просмотр: видео (Media3 ExoPlayer) и увеличение фото пальцами (Telephoto).
+    // Просмотр: видео (Media3 ExoPlayer) и увеличение пальцами (Telephoto).
+    // Кнопки плеера свои (Compose), поэтому media3-ui не нужен.
     implementation(libs.media3.exoplayer)
-    implementation(libs.media3.ui)
     implementation(libs.telephoto.zoomable)
 
     debugImplementation(libs.androidx.ui.tooling)

@@ -16,6 +16,8 @@ import com.pocketcalc.calculator.vault.VaultSession
 /** Видеоплеер для файла из тайника. Вызывающий обязан вызвать release(). */
 object VaultPlayer {
 
+    private const val SEEK_STEP_MS = 10_000L
+
     @OptIn(UnstableApi::class)
     fun create(
         context: Context,
@@ -31,6 +33,9 @@ object VaultPlayer {
             // Пауза, если звонок или другое приложение заиграло звук, и если отключили наушники.
             .setAudioAttributes(AudioAttributes.DEFAULT, /* handleAudioFocus = */ true)
             .setHandleAudioBecomingNoisy(true)
+            // Кнопки перемотки: ровно 10 секунд назад и вперёд.
+            .setSeekBackIncrementMs(SEEK_STEP_MS)
+            .setSeekForwardIncrementMs(SEEK_STEP_MS)
             .build()
             .apply {
                 // Адрес нужен плееру только как имя: данные идут из VaultDataSource.

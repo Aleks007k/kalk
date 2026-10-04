@@ -4,8 +4,6 @@ import android.graphics.BitmapFactory
 import android.graphics.drawable.Animatable
 import android.text.format.Formatter
 import android.util.LruCache
-import android.view.SurfaceView
-import android.view.View
 import android.widget.ImageView
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -29,13 +27,12 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -43,11 +40,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -67,10 +62,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.ui.PlayerView
 import com.pocketcalc.calculator.R
 import com.pocketcalc.calculator.vault.EntryKind
 import com.pocketcalc.calculator.vault.VaultEntry
@@ -78,7 +69,6 @@ import com.pocketcalc.calculator.vault.VaultRepository
 import com.pocketcalc.calculator.vault.VaultSession
 import com.pocketcalc.calculator.viewer.DecodedImage
 import com.pocketcalc.calculator.viewer.PhotoDecoder
-import com.pocketcalc.calculator.viewer.VaultPlayer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -99,9 +89,9 @@ private val decodeDispatcher = Executors.newFixedThreadPool(2).asCoroutineDispat
 
 /**
  * Просмотр файлов на весь экран с листанием влево-вправо в том же порядке,
- * что и в сетке. Фото увеличиваются пальцами и двойным нажатием, видео
- * играет с перемоткой. Всё расшифровывается в память — на диск ничего не
- * пишется. Нажатие прячет и показывает верхнюю панель; «⋮» — восстановить
+ * что и в сетке. Фото и видео увеличиваются пальцами и двойным нажатием,
+ * у видео — перемотка ползунком и на 10 секунд кнопками. Всё
+ * расшифровывается в память — на диск ничего не пишется. Нажатие прячет и показывает верхнюю панель; «⋮» — восстановить
  * или удалить (то же меню, что при долгом нажатии в сетке).
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -148,8 +138,9 @@ fun ViewerScreen(
                     entry = entry,
                     repository = repository,
                     session = session,
-                    thumbCache = thumbCache,
+                    placeholder = rememberThumbnail(entry, repository, session, thumbCache),
                     active = pagerState.settledPage == page,
+                    chromeVisible = chromeVisible,
                     onTap = toggleChrome,
                     onChromeVisible = { chromeVisible = it },
                 )
@@ -260,100 +251,6 @@ private fun ZoomablePhoto(image: DecodedImage, onTap: () -> Unit) {
     }
 }
 
-// --- Видео --------------------------------------------------------------
-
-/**
- * Плеер создаётся только для страницы, на которой остановилось листание, и
- * освобождается, как только её пролистали или тайник закрылся.
- */
-@androidx.annotation.OptIn(UnstableApi::class)
-@Composable
-private fun VideoPage(
-    entry: VaultEntry,
-    repository: VaultRepository,
-    session: VaultSession,
-    thumbCache: LruCache<String, ImageBitmap>,
-    active: Boolean,
-    onTap: () -> Unit,
-    onChromeVisible: (Boolean) -> Unit,
-) {
-    if (active) {
-        val context = LocalContext.current
-        val currentOnChromeVisible by rememberUpdatedState(onChromeVisible)
-        var failed by remember(entry.id) { mutableStateOf(false) }
-        val exoPlayer = remember(entry.id) { VaultPlayer.create(context, repository, session, entry) }
-        DisposableEffect(exoPlayer) {
-            val listener = object : Player.Listener {
-                override fun onPlayerError(error: PlaybackException) {
-                    failed = true
-                }
-            }
-            exoPlayer.addListener(listener)
-            onDispose {
-                exoPlayer.removeListener(listener)
-                exoPlayer.release()
-            }
-        }
-        Box(modifier = Modifier.fillMaxSize()) {
-            AndroidView(
-                factory = { viewContext ->
-                    PlayerView(viewContext).apply {
-                        // Кадры видео тоже защищены от скриншотов и записи экрана.
-                        (videoSurfaceView as? SurfaceView)?.setSecure(true)
-                        setShowPreviousButton(false)
-                        setShowNextButton(false)
-                        keepScreenOn = true
-                        setControllerVisibilityListener(
-                            PlayerView.ControllerVisibilityListener { visibility ->
-                                currentOnChromeVisible(visibility == View.VISIBLE)
-                            },
-                        )
-                        player = exoPlayer
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
-            if (failed) {
-                Text(
-                    text = stringResource(R.string.viewer_video_failed),
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(32.dp),
-                )
-            }
-        }
-    } else {
-        val placeholder = rememberThumbnail(entry, repository, session, thumbCache)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) { detectTapGestures(onTap = { onTap() }) },
-            contentAlignment = Alignment.Center,
-        ) {
-            if (placeholder != null) {
-                Image(placeholder, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-            }
-            PlayBadge()
-        }
-    }
-}
-
-@Composable
-private fun PlayBadge() {
-    Box(
-        modifier = Modifier
-            .size(64.dp)
-            .clip(CircleShape)
-            .background(Color(0x99000000)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text = "▶", color = Color.White, fontSize = 26.sp)
-    }
-}
-
 // --- Прочие файлы и сообщения -------------------------------------------
 
 @Composable
@@ -449,9 +346,10 @@ private fun ViewerTopBar(entry: VaultEntry, onBack: () -> Unit, onMore: () -> Un
             .padding(horizontal = 4.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextButton(onClick = onBack) {
-            Text(text = "←", color = Color.White, fontSize = 24.sp)
+        RoundIconButton(onClick = onBack, size = 52.dp) {
+            BackArrowIcon(modifier = Modifier.size(30.dp))
         }
+        Spacer(Modifier.width(4.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = entry.name,
@@ -468,8 +366,8 @@ private fun ViewerTopBar(entry: VaultEntry, onBack: () -> Unit, onMore: () -> Un
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        TextButton(onClick = onMore) {
-            Text(text = "⋮", color = Color.White, fontSize = 24.sp)
+        RoundIconButton(onClick = onMore, size = 52.dp) {
+            MoreIcon(modifier = Modifier.size(28.dp))
         }
     }
 }
