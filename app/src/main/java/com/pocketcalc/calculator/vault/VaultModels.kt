@@ -51,15 +51,31 @@ data class VaultEntry(
     val origFolder: String = "",
 )
 
-/** Оглавление одного тайника: список записей. */
-data class VaultIndex(val entries: List<VaultEntry>) {
+/**
+ * Оглавление одного тайника: список записей и две пометки.
+ *
+ * [isDecoy] — это фальшивый тайник (его создал настоящий). В нём не
+ * показывается настройка фальшивого PIN: иначе тот, кому его открыли,
+ * мог бы через неё стереть настоящий тайник.
+ * [hasDecoy] — у этого (настоящего) тайника задан фальшивый PIN.
+ *
+ * Пометки лежат внутри зашифрованного оглавления: без ключа их не прочитать.
+ */
+data class VaultIndex(
+    val entries: List<VaultEntry>,
+    val isDecoy: Boolean = false,
+    val hasDecoy: Boolean = false,
+) {
 
-    fun add(entry: VaultEntry): VaultIndex = VaultIndex(entries + entry)
+    fun add(entry: VaultEntry): VaultIndex = copy(entries = entries + entry)
 
-    fun remove(entryId: String): VaultIndex = VaultIndex(entries.filterNot { it.id == entryId })
+    fun remove(entryId: String): VaultIndex = copy(entries = entries.filterNot { it.id == entryId })
 
     /** Та же запись (по id) с новыми данными; порядок записей не меняется. */
-    fun replace(entry: VaultEntry): VaultIndex = VaultIndex(entries.map { if (it.id == entry.id) entry else it })
+    fun replace(entry: VaultEntry): VaultIndex = copy(entries = entries.map { if (it.id == entry.id) entry else it })
+
+    /** Все зашифрованные файлы этого тайника: сами файлы и их миниатюры. */
+    fun blobIds(): Set<String> = entries.flatMap { listOfNotNull(it.blobId, it.thumbId) }.toSet()
 
     fun find(entryId: String): VaultEntry? = entries.firstOrNull { it.id == entryId }
 
@@ -72,10 +88,14 @@ data class VaultIndex(val entries: List<VaultEntry>) {
          * Версии формата:
          *  1 — первая (этап 2–3);
          *  2 — добавлены отпечаток содержимого, дата съёмки и длительность видео;
-         *  3 — добавлена исходная папка файла (для восстановления).
+         *  3 — добавлена исходная папка файла (для восстановления);
+         *  4 — пометки «фальшивый тайник» и «задан фальшивый PIN».
          * Старые версии читаются всегда: обновление приложения не должно ломать тайник.
          */
-        private const val VERSION = 3
+        private const val VERSION = 4
+
+        private const val FLAG_DECOY = 1
+        private const val FLAG_HAS_DECOY = 2
 
         fun empty(): VaultIndex = VaultIndex(emptyList())
 
@@ -84,6 +104,10 @@ data class VaultIndex(val entries: List<VaultEntry>) {
             val bos = ByteArrayOutputStream()
             DataOutputStream(bos).use { out ->
                 out.writeInt(VERSION)
+                // версия 4
+                out.writeInt(
+                    (if (index.isDecoy) FLAG_DECOY else 0) or (if (index.hasDecoy) FLAG_HAS_DECOY else 0),
+                )
                 out.writeInt(index.entries.size)
                 for (e in index.entries) {
                     out.writeUTF(e.id)
@@ -106,11 +130,12 @@ data class VaultIndex(val entries: List<VaultEntry>) {
             return bos.toByteArray()
         }
 
-        /** Восстанавливает оглавление из байтов (после расшифровки). Понимает версии 1–3. */
+        /** Восстанавливает оглавление из байтов (после расшифровки). Понимает версии 1–4. */
         fun deserialize(bytes: ByteArray): VaultIndex {
             DataInputStream(ByteArrayInputStream(bytes)).use { input ->
                 val version = input.readInt()
                 require(version in 1..VERSION) { "неизвестная версия оглавления: $version" }
+                val flags = if (version >= 4) input.readInt() else 0
                 val count = input.readInt()
                 val list = ArrayList<VaultEntry>(count)
                 repeat(count) {
@@ -139,7 +164,11 @@ data class VaultIndex(val entries: List<VaultEntry>) {
                         )
                     )
                 }
-                return VaultIndex(list)
+                return VaultIndex(
+                    entries = list,
+                    isDecoy = flags and FLAG_DECOY != 0,
+                    hasDecoy = flags and FLAG_HAS_DECOY != 0,
+                )
             }
         }
     }

@@ -227,4 +227,164 @@ class VaultRepositoryTest {
         assertEquals(VaultRepository.State.READY, again.state())
         assertArrayEquals(created.masterKey, again.unlockWithPin(pin.toCharArray(), gate)!!.masterKey)
     }
+
+    // --- Фальшивый PIN, смена PIN, новый код (этап 6) ---------------------
+
+    private val decoyPin = "73915824"
+
+    /** «Через две минуты»: все файлы на диске считаются давними и подлежат уборке. */
+    private fun later() = System.currentTimeMillis() + 120_000
+
+    private fun blobCount(dir: File) = File(dir, "blobs").listFiles()?.size ?: 0
+    private fun indexCount(dir: File) = dir.listFiles()!!.count { it.name.startsWith("index_") }
+
+    private fun addFile(r: VaultRepository, s: VaultSession, seed: Int): VaultEntry {
+        val data = ByteArray(5000) { ((it * 7 + seed) % 251).toByte() }
+        return (r.importFile(s, ByteArrayInputStream(data), ImportMeta("f$seed.jpg", "image/jpeg"), ByteArray(50) { seed.toByte() })
+            as ImportResult.Added).entry
+    }
+
+    @Test fun decoyPinOpensSeparateEmptyVault() {
+        val dir = newDir()
+        val r = repo(dir)
+        val real = setUp(r)
+        addFile(r, real, 1)
+        r.setDecoyPin(real, decoyPin.toCharArray(), gate, now = later())
+
+        val decoy = r.unlockWithPin(decoyPin.toCharArray(), gate)!!
+        assertTrue("фальшивый тайник в другом слоте", decoy.slot != real.slot)
+        assertTrue(r.isDecoy(decoy))
+        assertEquals(0, r.loadIndex(decoy)!!.entries.size)
+
+        assertFalse(r.isDecoy(real))
+        assertTrue(r.hasDecoy(real))
+        val again = r.unlockWithPin(pin.toCharArray(), gate)!!
+        assertEquals(real.slot, again.slot)
+        assertEquals("файлы настоящего тайника целы", 1, r.loadIndex(again)!!.entries.size)
+        assertEquals("оглавлений по-прежнему два", 2, indexCount(dir))
+    }
+
+    @Test fun decoyPinMustDifferFromRealPin() {
+        val dir = newDir()
+        val r = repo(dir)
+        val real = setUp(r)
+        val slotsBefore = File(dir, "slot_A.bin").readBytes().toList() to File(dir, "slot_B.bin").readBytes().toList()
+        try {
+            r.setDecoyPin(real, pin.toCharArray(), gate, now = later())
+            fail("фальшивый PIN не может совпадать с настоящим")
+        } catch (e: PinInUseException) {
+            // ожидаемо
+        }
+        val slotsAfter = File(dir, "slot_A.bin").readBytes().toList() to File(dir, "slot_B.bin").readBytes().toList()
+        assertEquals("слоты не тронуты", slotsBefore, slotsAfter)
+        assertFalse(r.hasDecoy(real))
+    }
+
+    @Test fun newDecoyReplacesOldDecoyAndItsFiles() {
+        val dir = newDir()
+        val r = repo(dir)
+        val real = setUp(r)
+        val realEntry = addFile(r, real, 1)
+        r.setDecoyPin(real, decoyPin.toCharArray(), gate, now = later())
+        val decoy = r.unlockWithPin(decoyPin.toCharArray(), gate)!!
+        addFile(r, decoy, 2)
+        assertEquals(4, blobCount(dir))   // по файлу и миниатюре в каждом тайнике
+
+        val newDecoyPin = "58203716"
+        r.setDecoyPin(real, newDecoyPin.toCharArray(), gate, now = later())
+
+        assertNull("старый фальшивый PIN больше ничего не открывает", r.unlockWithPin(decoyPin.toCharArray(), gate))
+        val fresh = r.unlockWithPin(newDecoyPin.toCharArray(), gate)!!
+        assertEquals(0, r.loadIndex(fresh)!!.entries.size)
+        assertEquals("файлы прежнего фальшивого тайника удалены", 2, blobCount(dir))
+        val realAgain = r.unlockWithPin(pin.toCharArray(), gate)!!
+        val entry = r.loadIndex(realAgain)!!.find(realEntry.id)!!
+        assertEquals(5000, r.openContent(realAgain, entry).use { it.readBytes() }.size)
+        assertNotNull(r.readThumbnail(realAgain, entry))
+        assertEquals(2, indexCount(dir))
+    }
+
+    @Test fun removeDecoyPinLeavesOnlyRealVault() {
+        val dir = newDir()
+        val r = repo(dir)
+        val real = setUp(r)
+        addFile(r, real, 1)
+        r.setDecoyPin(real, decoyPin.toCharArray(), gate, now = later())
+        r.removeDecoyPin(real, now = later())
+
+        assertNull(r.unlockWithPin(decoyPin.toCharArray(), gate))
+        assertFalse(r.hasDecoy(real))
+        assertEquals(1, r.loadIndex(r.unlockWithPin(pin.toCharArray(), gate)!!)!!.entries.size)
+        assertEquals(2, indexCount(dir))
+        // Слоты снова одинакового размера: наполнитель неотличим от фальшивого тайника.
+        assertEquals(File(dir, "slot_A.bin").length(), File(dir, "slot_B.bin").length())
+    }
+
+    @Test fun decoyVaultCannotReplaceTheRealOne() {
+        val dir = newDir()
+        val r = repo(dir)
+        val real = setUp(r)
+        addFile(r, real, 1)
+        r.setDecoyPin(real, decoyPin.toCharArray(), gate, now = later())
+        val decoy = r.unlockWithPin(decoyPin.toCharArray(), gate)!!
+        try {
+            r.setDecoyPin(decoy, "60418273".toCharArray(), gate, now = later())
+            fail("из фальшивого тайника нельзя трогать второй слот")
+        } catch (e: IllegalStateException) {
+            // ожидаемо
+        }
+        try {
+            r.removeDecoyPin(decoy, now = later())
+            fail("из фальшивого тайника нельзя трогать второй слот")
+        } catch (e: IllegalStateException) {
+            // ожидаемо
+        }
+        val realAgain = r.unlockWithPin(pin.toCharArray(), gate)!!
+        assertEquals("настоящий тайник цел", 1, r.loadIndex(realAgain)!!.entries.size)
+    }
+
+    @Test fun freshUnreferencedFilesSurviveCleanup() {
+        val dir = newDir()
+        val r = repo(dir)
+        val real = setUp(r)
+        // Файл, который «прямо сейчас» записывает другая операция.
+        val inFlight = File(File(dir, "blobs"), "0123456789abcdef0123456789abcdef")
+        inFlight.writeBytes(ByteArray(10))
+        r.setDecoyPin(real, decoyPin.toCharArray(), gate)   // настоящее время
+        assertTrue("свежий файл не удалён", inFlight.exists())
+    }
+
+    @Test fun changePinCannotTakeTheDecoyPin() {
+        val r = repo()
+        val real = setUp(r)
+        r.setDecoyPin(real, decoyPin.toCharArray(), gate, now = later())
+        try {
+            r.changePin(real, decoyPin.toCharArray(), gate)
+            fail("два тайника с одним PIN быть не может")
+        } catch (e: PinInUseException) {
+            // ожидаемо
+        }
+        assertEquals(real.slot, r.unlockWithPin(pin.toCharArray(), gate)!!.slot)
+    }
+
+    @Test fun decoyCanChangeItsOwnPin() {
+        val r = repo()
+        val real = setUp(r)
+        r.setDecoyPin(real, decoyPin.toCharArray(), gate, now = later())
+        val decoy = r.unlockWithPin(decoyPin.toCharArray(), gate)!!
+        val newDecoyPin = "64028175"
+        r.changePin(decoy, newDecoyPin.toCharArray(), gate)
+        assertEquals(decoy.slot, r.unlockWithPin(newDecoyPin.toCharArray(), gate)!!.slot)
+        assertEquals(real.slot, r.unlockWithPin(pin.toCharArray(), gate)!!.slot)
+    }
+
+    @Test fun newRecoveryCodeReplacesOldOne() {
+        val r = repo()
+        val real = setUp(r)
+        val newCode = "7351902846130579"
+        r.changeRecovery(real, newCode.toCharArray())
+        assertNull("старый код больше не работает", r.unlockWithRecovery(code.toCharArray()))
+        assertEquals(real.slot, r.unlockWithRecovery(newCode.toCharArray())!!.slot)
+        assertEquals("PIN по-прежнему работает", real.slot, r.unlockWithPin(pin.toCharArray(), gate)!!.slot)
+    }
 }

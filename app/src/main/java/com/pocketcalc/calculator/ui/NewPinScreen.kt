@@ -1,5 +1,6 @@
 package com.pocketcalc.calculator.ui
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Spacer
@@ -12,11 +13,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.pocketcalc.calculator.CalcApp
 import com.pocketcalc.calculator.R
 import com.pocketcalc.calculator.ui.theme.calcPalette
+import com.pocketcalc.calculator.vault.PinInUseException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,6 +34,8 @@ fun NewPinScreen(app: CalcApp, onDone: () -> Unit, onCancel: () -> Unit) {
     BackHandler(onBack = onCancel)
     val palette = calcPalette(isSystemInDarkTheme())
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val msgPinInUse = stringResource(R.string.pin_in_use)
     var saving by remember { mutableStateOf(false) }
 
     if (saving) {
@@ -51,19 +56,26 @@ fun NewPinScreen(app: CalcApp, onDone: () -> Unit, onCancel: () -> Unit) {
             } else {
                 saving = true
                 scope.launch {
-                    val ok = withContext(Dispatchers.Default) {
+                    val result = withContext(Dispatchers.Default) {
                         val p = newPin.toCharArray()
                         try {
                             app.repository.changePin(session, p, app.gate)
-                            true
+                            OpResult.OK
+                        } catch (e: PinInUseException) {
+                            OpResult.PIN_IN_USE
                         } catch (e: Exception) {
-                            false
+                            OpResult.FAILED
                         } finally {
                             p.fill('0')
                         }
                     }
                     saving = false
-                    if (ok) onDone() else onCancel()
+                    when (result) {
+                        OpResult.OK -> onDone()
+                        // Такой PIN уже открывает другой тайник — просим придумать другой.
+                        OpResult.PIN_IN_USE -> Toast.makeText(context, msgPinInUse, Toast.LENGTH_LONG).show()
+                        OpResult.FAILED -> onCancel()
+                    }
                 }
             }
         },

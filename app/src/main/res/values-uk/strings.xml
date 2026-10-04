@@ -101,4 +101,30 @@
     <string name="section_files">Файли</string>
     <string name="files_empty_title">Файлів поки немає</string>
     <string name="files_empty_text">Тут зберігаються документи й нотатки. Натисніть «+ Файли» або «+ Нотатка».</string>
+
+    <!-- Настройки (этап 6) -->
+    <string name="settings_title">Налаштування</string>
+    <string name="settings_change_pin">Змінити PIN-код</string>
+    <string name="settings_change_pin_hint">Код відновлення залишиться тим самим</string>
+    <string name="settings_new_code">Новий код відновлення</string>
+    <string name="settings_new_code_hint">Старий код перестане працювати</string>
+    <string name="settings_decoy">Фальшивий PIN</string>
+    <string name="settings_decoy_on">Увімкнено</string>
+    <string name="settings_decoy_off">Вимкнено</string>
+    <string name="settings_version">Версія %1$s</string>
+    <string name="settings_failed">Не вдалося. Спробуйте ще раз.</string>
+    <string name="pin_changed">PIN-код змінено</string>
+    <string name="pin_in_use">Цей PIN-код уже зайнятий. Придумайте інший.</string>
+    <string name="code_changed">Новий код збережено. Старий більше не працює.</string>
+    <string name="decoy_pin_title">Придумайте фальшивий PIN-код</string>
+    <string name="decoy_text">Фальшивий PIN відкриває друге, окреме сховище. Якщо вас змусять відкрити сховище — наберіть фальшивий PIN: відкриється друге сховище, а про справжнє ніхто не дізнається.\n\nПокладіть туди щось безневинне, щоб воно виглядало справжнім. У самому фальшивому сховищі цього пункту налаштувань немає.</string>
+    <string name="decoy_replace_warning">Фальшивий PIN уже задано. Якщо задати новий, попереднє фальшиве сховище видалиться разом з усіма файлами в ньому.</string>
+    <string name="decoy_set">Задати фальшивий PIN</string>
+    <string name="decoy_set_new">Задати новий фальшивий PIN</string>
+    <string name="decoy_remove">Прибрати фальшивий PIN</string>
+    <string name="decoy_remove_confirm_title">Прибрати фальшивий PIN?</string>
+    <string name="decoy_remove_confirm_text">Фальшиве сховище видалиться разом з усіма файлами в ньому. Справжнє сховище не зміниться.</string>
+    <string name="decoy_is_real_pin">Це PIN-код справжнього сховища. Фальшивий має бути іншим.</string>
+    <string name="decoy_done">Фальшивий PIN задано</string>
+    <string name="decoy_removed">Фальшивий PIN прибрано</string>
 </resources>

@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -245,6 +246,111 @@ fun PinCreator(
         val err = error
         if (err != null) {
             Text(text = err, color = palette.error, fontSize = 15.sp, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+/** Показ кода восстановления: 16 цифр группами по 4 и кнопка «Я записал». */
+@Composable
+fun RecoveryCodeShow(code: String, palette: CalcPalette, onWritten: () -> Unit) {
+    StepLayout(
+        title = stringResource(R.string.recovery_title),
+        palette = palette,
+        bottom = {
+            PrimaryButton(
+                text = stringResource(R.string.recovery_written),
+                palette = palette,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onWritten,
+            )
+        },
+    ) {
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = SecretInput.formatRecoveryCode(code),
+            color = palette.displayPrimary,
+            fontSize = 30.sp,
+            fontFamily = FontFamily.Monospace,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = stringResource(R.string.recovery_text),
+            color = palette.displaySecondary,
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/**
+ * Проверка, что код записан без ошибок: его нужно набрать заново с бумаги.
+ * [onConfirmed] — набран верно; [onShowAgain] — показать код ещё раз.
+ */
+@Composable
+fun RecoveryCodeConfirm(
+    code: String,
+    palette: CalcPalette,
+    onShowAgain: () -> Unit,
+    onConfirmed: () -> Unit,
+) {
+    var codeEntry by remember { mutableStateOf("") }
+    var codeError by remember { mutableStateOf(false) }
+    StepLayout(
+        title = stringResource(R.string.recovery_confirm_title),
+        palette = palette,
+        hint = stringResource(R.string.recovery_confirm_hint),
+        bottom = {
+            DigitPad(
+                palette = palette,
+                onDigit = { d ->
+                    if (codeEntry.length < SecretInput.RECOVERY_LENGTH) {
+                        codeEntry += d
+                        codeError = false
+                    }
+                },
+                onBackspace = { codeEntry = codeEntry.dropLast(1) },
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onShowAgain) {
+                    Text(
+                        text = stringResource(R.string.recovery_show_again),
+                        color = palette.displaySecondary,
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                PrimaryButton(
+                    text = stringResource(R.string.recovery_check),
+                    palette = palette,
+                    enabled = codeEntry.length == SecretInput.RECOVERY_LENGTH,
+                ) {
+                    if (codeEntry == code) {
+                        onConfirmed()
+                    } else {
+                        codeError = true
+                        codeEntry = ""
+                    }
+                }
+            }
+        },
+    ) {
+        Spacer(Modifier.height(24.dp))
+        Text(
+            text = if (codeEntry.isEmpty()) " " else SecretInput.formatRecoveryCode(codeEntry),
+            color = palette.displayPrimary,
+            fontSize = 28.sp,
+            fontFamily = FontFamily.Monospace,
+        )
+        if (codeError) {
+            Text(
+                text = stringResource(R.string.recovery_mismatch),
+                color = palette.error,
+                fontSize = 15.sp,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }

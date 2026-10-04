@@ -101,4 +101,30 @@
     <string name="section_files">Files</string>
     <string name="files_empty_title">No files yet</string>
     <string name="files_empty_text">Documents and notes are kept here. Tap “+ Files” or “+ Note”.</string>
+
+    <!-- Settings (phase 6) -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_change_pin">Change PIN</string>
+    <string name="settings_change_pin_hint">Your recovery code stays the same</string>
+    <string name="settings_new_code">New recovery code</string>
+    <string name="settings_new_code_hint">The old code will stop working</string>
+    <string name="settings_decoy">Decoy PIN</string>
+    <string name="settings_decoy_on">On</string>
+    <string name="settings_decoy_off">Off</string>
+    <string name="settings_version">Version %1$s</string>
+    <string name="settings_failed">That didn’t work. Please try again.</string>
+    <string name="pin_changed">PIN changed</string>
+    <string name="pin_in_use">This PIN is already taken. Choose another one.</string>
+    <string name="code_changed">New code saved. The old one no longer works.</string>
+    <string name="decoy_pin_title">Create a decoy PIN</string>
+    <string name="decoy_text">A decoy PIN opens a second, separate vault. If someone forces you to open the vault, enter the decoy PIN: the second vault opens and nobody learns about the real one.\n\nPut something harmless there so it looks real. This settings item is not shown inside the decoy vault.</string>
+    <string name="decoy_replace_warning">A decoy PIN is already set. Setting a new one deletes the old decoy vault together with all its files.</string>
+    <string name="decoy_set">Set decoy PIN</string>
+    <string name="decoy_set_new">Set a new decoy PIN</string>
+    <string name="decoy_remove">Remove decoy PIN</string>
+    <string name="decoy_remove_confirm_title">Remove the decoy PIN?</string>
+    <string name="decoy_remove_confirm_text">The decoy vault will be deleted together with all its files. Your real vault stays as it is.</string>
+    <string name="decoy_is_real_pin">This is the PIN of your real vault. The decoy PIN must be different.</string>
+    <string name="decoy_done">Decoy PIN set</string>
+    <string name="decoy_removed">Decoy PIN removed</string>
 </resources>

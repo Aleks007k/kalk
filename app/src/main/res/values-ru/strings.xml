@@ -101,4 +101,30 @@
     <string name="section_files">Файлы</string>
     <string name="files_empty_title">Файлов пока нет</string>
     <string name="files_empty_text">Здесь хранятся документы и заметки. Нажмите «+ Файлы» или «+ Заметка».</string>
+
+    <!-- Настройки (этап 6) -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_change_pin">Сменить PIN-код</string>
+    <string name="settings_change_pin_hint">Код восстановления останется прежним</string>
+    <string name="settings_new_code">Новый код восстановления</string>
+    <string name="settings_new_code_hint">Старый код перестанет работать</string>
+    <string name="settings_decoy">Фальшивый PIN</string>
+    <string name="settings_decoy_on">Включён</string>
+    <string name="settings_decoy_off">Выключен</string>
+    <string name="settings_version">Версия %1$s</string>
+    <string name="settings_failed">Не получилось. Попробуйте ещё раз.</string>
+    <string name="pin_changed">PIN-код изменён</string>
+    <string name="pin_in_use">Этот PIN-код уже занят. Придумайте другой.</string>
+    <string name="code_changed">Новый код сохранён. Старый больше не работает.</string>
+    <string name="decoy_pin_title">Придумайте фальшивый PIN-код</string>
+    <string name="decoy_text">Фальшивый PIN открывает второй, отдельный тайник. Если вас заставят открыть тайник — наберите фальшивый PIN: откроется второй тайник, а о настоящем никто не узнает.\n\nПоложите туда что-нибудь безобидное, чтобы он выглядел настоящим. В самом фальшивом тайнике этого пункта настроек нет.</string>
+    <string name="decoy_replace_warning">Фальшивый PIN уже задан. Если задать новый, прежний фальшивый тайник удалится вместе со всеми файлами в нём.</string>
+    <string name="decoy_set">Задать фальшивый PIN</string>
+    <string name="decoy_set_new">Задать новый фальшивый PIN</string>
+    <string name="decoy_remove">Убрать фальшивый PIN</string>
+    <string name="decoy_remove_confirm_title">Убрать фальшивый PIN?</string>
+    <string name="decoy_remove_confirm_text">Фальшивый тайник удалится вместе со всеми файлами в нём. Настоящий тайник не изменится.</string>
+    <string name="decoy_is_real_pin">Это PIN-код настоящего тайника. Фальшивый должен быть другим.</string>
+    <string name="decoy_done">Фальшивый PIN задан</string>
+    <string name="decoy_removed">Фальшивый PIN убран</string>
 </resources>

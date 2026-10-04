@@ -14,6 +14,12 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.concurrent.CompletableFuture
 
+/** Этот PIN уже открывает другой тайник — два тайника с одним PIN быть не может. */
+class PinInUseException : IllegalArgumentException("этот PIN уже используется")
+
+/** Свежие ничейные файлы не трогаем: их может как раз записывать другая операция. */
+private const val BLOB_GRACE_MS = 60_000L
+
 /** Размер куска при выгрузке файла из тайника. */
 private const val EXPORT_BUFFER = 64 * 1024
 
@@ -155,8 +161,12 @@ class VaultRepository(
     fun unlockWithRecovery(code: CharArray): VaultSession? =
         pick(forBothSlots { slot -> VaultKeyManager.openWithRecovery(slot, code) })
 
-    /** Меняет PIN открытого тайника. Мастер-ключ и код восстановления не меняются. */
+    /**
+     * Меняет PIN открытого тайника. Мастер-ключ и код восстановления не меняются.
+     * Если новый PIN уже открывает второй тайник — [PinInUseException].
+     */
     fun changePin(session: VaultSession, newPin: CharArray, gate: KeystoreGate) {
+        if (pinOpensSlot(other(session.slot), newPin, gate)) throw PinInUseException()
         // Копия ключа: если тайник закроют посреди операции, копия останется целой.
         val master = session.copyKey()
         try {
@@ -166,6 +176,53 @@ class VaultRepository(
         } finally {
             master.fill(0)
         }
+    }
+
+    /** Новый код восстановления открытого тайника; старый перестаёт работать. */
+    fun changeRecovery(session: VaultSession, newCode: CharArray) {
+        val master = session.copyKey()
+        try {
+            val slot = readSlot(session.slot) ?: error("слот не найден")
+            val updated = VaultKeyManager.changeRecovery(slot, master, newCode, recoveryParams)
+            writeSlot(session.slot, updated)
+        } finally {
+            master.fill(0)
+        }
+    }
+
+    /** Открыт фальшивый тайник? (В нём нет настройки фальшивого PIN.) */
+    fun isDecoy(session: VaultSession): Boolean = loadIndex(session)?.isDecoy == true
+
+    /** Задан ли у этого (настоящего) тайника фальшивый PIN. */
+    fun hasDecoy(session: VaultSession): Boolean = loadIndex(session)?.hasDecoy == true
+
+    /**
+     * Задаёт фальшивый PIN: во второй слот кладётся новый пустой тайник,
+     * открывающийся этим PIN. Всё, что было во втором слоте (наполнитель или
+     * прежний фальшивый тайник вместе с его файлами), удаляется.
+     * Только из настоящего тайника. Если PIN совпадает с настоящим —
+     * [PinInUseException].
+     */
+    fun setDecoyPin(
+        session: VaultSession,
+        decoyPin: CharArray,
+        gate: KeystoreGate,
+        now: Long = System.currentTimeMillis(),
+    ) {
+        if (pinOpensSlot(session.slot, decoyPin, gate)) throw PinInUseException()
+        // Код восстановления фальшивого тайника никому не показывается.
+        val code = CharArray(SecretInput.RECOVERY_LENGTH) { '0' + rng.nextInt(10) }
+        val created = try {
+            VaultKeyManager.createSlot(decoyPin, code, gate, pinParams, recoveryParams)
+        } finally {
+            code.fill('0')
+        }
+        replaceOtherSlot(session, created, decoy = true, now = now)
+    }
+
+    /** Убирает фальшивый PIN: на месте фальшивого тайника снова «наполнитель». */
+    fun removeDecoyPin(session: VaultSession, now: Long = System.currentTimeMillis()) {
+        replaceOtherSlot(session, createFiller(), decoy = false, now = now)
     }
 
     /** Удаляет мусор от прерванных операций. Вызывать при запуске приложения. */
@@ -410,6 +467,45 @@ class VaultRepository(
         } catch (e: Exception) {
             null
         }
+
+    /**
+     * Кладёт [created] во второй слот (не тот, что открыт), с пустым
+     * оглавлением. Порядок важен: сначала оглавление нового тайника, потом
+     * мгновенная замена слота; уборка остатков прежнего — в самом конце.
+     * Сбой до замены слота ничего не меняет, после — оставляет лишь мусор.
+     */
+    private fun replaceOtherSlot(
+        session: VaultSession,
+        created: Pair<VaultKeyManager.Slot, ByteArray>,
+        decoy: Boolean,
+        now: Long,
+    ) {
+        val (newSlot, newMaster) = created
+        try {
+            withKeyCopy(session) { realKey ->
+                synchronized(indexLock) {
+                    val realIndex = storage.loadIndex(realKey) ?: error("оглавление повреждено")
+                    check(!realIndex.isDecoy) { "фальшивый PIN задаётся только в настоящем тайнике" }
+                    storage.saveIndex(newMaster, VaultIndex(emptyList(), isDecoy = decoy))
+                    writeSlot(other(session.slot), newSlot)
+                    storage.saveIndex(realKey, realIndex.copy(hasDecoy = decoy))
+                    // Остатки прежнего второго тайника: его оглавление и файлы.
+                    storage.deleteIndexesExcept(realKey, newMaster)
+                    storage.deleteBlobsExcept(realIndex.blobIds(), olderThanMs = now - BLOB_GRACE_MS)
+                }
+            }
+        } finally {
+            newMaster.fill(0)
+        }
+    }
+
+    /** Открывает ли [pin] слот [pos]. Ключ, если подошёл, сразу затирается. */
+    private fun pinOpensSlot(pos: SlotPos, pin: CharArray, gate: KeystoreGate): Boolean {
+        val slot = readSlot(pos) ?: return false
+        val key = safely { VaultKeyManager.openWithPin(slot, pin, gate) } ?: return false
+        key.fill(0)
+        return true
+    }
 
     private fun readSlot(pos: SlotPos): VaultKeyManager.Slot? {
         val f = slotFile(pos)

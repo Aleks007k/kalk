@@ -12,8 +12,8 @@ android {
         applicationId = "com.pocketcalc.calculator"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "0.7.2"
+        versionCode = 11
+        versionName = "0.8.0"
     }
 
     // Подпись релиза.
@@ -68,6 +68,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {

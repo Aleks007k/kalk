@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -75,6 +76,31 @@ internal fun MoreIcon(modifier: Modifier = Modifier, color: Color = Color.White)
         for (f in floatArrayOf(0.22f, 0.5f, 0.78f)) {
             drawCircle(color, r, Offset(cx, size.height * f))
         }
+    }
+}
+
+/** Шестерёнка «настройки». */
+@Composable
+internal fun GearIcon(modifier: Modifier = Modifier, color: Color = Color.White) {
+    Canvas(modifier) {
+        val s = size.minDimension
+        val c = center
+        val outer = s * 0.47f
+        val body = s * 0.34f
+        val hole = s * 0.14f
+        val toothW = s * 0.16f
+        // Восемь зубцов вокруг кольца.
+        for (i in 0 until 8) {
+            rotate(degrees = i * 45f, pivot = c) {
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(c.x - toothW / 2, c.y - outer),
+                    size = Size(toothW, outer - body + s * 0.05f),
+                    cornerRadius = CornerRadius(s * 0.03f),
+                )
+            }
+        }
+        drawCircle(color, radius = (body + hole) / 2, center = c, style = Stroke(width = body - hole))
     }
 }
 

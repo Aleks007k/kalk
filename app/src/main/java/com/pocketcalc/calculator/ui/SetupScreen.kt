@@ -1,24 +1,19 @@
 package com.pocketcalc.calculator.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pocketcalc.calculator.CalcApp
@@ -44,8 +39,6 @@ fun SetupScreen(app: CalcApp, onDone: () -> Unit) {
     var step by remember { mutableStateOf(SetupStep.PIN) }
     var pin by remember { mutableStateOf("") }
     val code = remember { SecretInput.generateRecoveryCode() }
-    var codeEntry by remember { mutableStateOf("") }
-    var codeError by remember { mutableStateOf(false) }
 
     fun create() {
         step = SetupStep.CREATING
@@ -78,95 +71,18 @@ fun SetupScreen(app: CalcApp, onDone: () -> Unit) {
             },
         )
 
-        SetupStep.SHOW_CODE -> StepLayout(
-            title = stringResource(R.string.recovery_title),
+        SetupStep.SHOW_CODE -> RecoveryCodeShow(
+            code = code,
             palette = palette,
-            bottom = {
-                PrimaryButton(
-                    text = stringResource(R.string.recovery_written),
-                    palette = palette,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    codeEntry = ""
-                    codeError = false
-                    step = SetupStep.CONFIRM_CODE
-                }
-            },
-        ) {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = SecretInput.formatRecoveryCode(code),
-                color = palette.displayPrimary,
-                fontSize = 30.sp,
-                fontFamily = FontFamily.Monospace,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = stringResource(R.string.recovery_text),
-                color = palette.displaySecondary,
-                fontSize = 16.sp,
-                textAlign = TextAlign.Center,
-            )
-        }
+            onWritten = { step = SetupStep.CONFIRM_CODE },
+        )
 
-        SetupStep.CONFIRM_CODE -> StepLayout(
-            title = stringResource(R.string.recovery_confirm_title),
+        SetupStep.CONFIRM_CODE -> RecoveryCodeConfirm(
+            code = code,
             palette = palette,
-            hint = stringResource(R.string.recovery_confirm_hint),
-            bottom = {
-                DigitPad(
-                    palette = palette,
-                    onDigit = { d ->
-                        if (codeEntry.length < SecretInput.RECOVERY_LENGTH) {
-                            codeEntry += d
-                            codeError = false
-                        }
-                    },
-                    onBackspace = { codeEntry = codeEntry.dropLast(1) },
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(onClick = { step = SetupStep.SHOW_CODE }) {
-                        Text(
-                            text = stringResource(R.string.recovery_show_again),
-                            color = palette.displaySecondary,
-                        )
-                    }
-                    Spacer(Modifier.weight(1f))
-                    PrimaryButton(
-                        text = stringResource(R.string.recovery_check),
-                        palette = palette,
-                        enabled = codeEntry.length == SecretInput.RECOVERY_LENGTH,
-                    ) {
-                        if (codeEntry == code) {
-                            create()
-                        } else {
-                            codeError = true
-                            codeEntry = ""
-                        }
-                    }
-                }
-            },
-        ) {
-            Spacer(Modifier.height(24.dp))
-            Text(
-                text = if (codeEntry.isEmpty()) " " else SecretInput.formatRecoveryCode(codeEntry),
-                color = palette.displayPrimary,
-                fontSize = 28.sp,
-                fontFamily = FontFamily.Monospace,
-            )
-            if (codeError) {
-                Text(
-                    text = stringResource(R.string.recovery_mismatch),
-                    color = palette.error,
-                    fontSize = 15.sp,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
+            onShowAgain = { step = SetupStep.SHOW_CODE },
+            onConfirmed = { create() },
+        )
 
         SetupStep.CREATING -> StepLayout(
             title = stringResource(R.string.setup_creating),

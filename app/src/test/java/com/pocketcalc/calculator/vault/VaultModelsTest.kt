@@ -141,6 +141,33 @@ class VaultModelsTest {
         assertEquals(99L, replaced.find("id2")!!.size)
     }
 
+    @Test fun version4FlagsRoundTrip() {
+        val decoy = roundTrip(VaultIndex(listOf(entry(1)), isDecoy = true))
+        assertEquals(true, decoy.isDecoy)
+        assertEquals(false, decoy.hasDecoy)
+        val real = roundTrip(VaultIndex(emptyList(), hasDecoy = true))
+        assertEquals(false, real.isDecoy)
+        assertEquals(true, real.hasDecoy)
+        // Пометки не теряются при изменении списка.
+        assertEquals(true, decoy.add(entry(2)).remove("id1").isDecoy)
+    }
+
+    @Test fun olderIndexesHaveNoFlags() {
+        val bos = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(bos).use { out ->
+            out.writeInt(3)
+            out.writeInt(0)
+        }
+        val index = VaultIndex.deserialize(bos.toByteArray())
+        assertEquals(false, index.isDecoy)
+        assertEquals(false, index.hasDecoy)
+    }
+
+    @Test fun blobIdsIncludeThumbnails() {
+        val idx = VaultIndex.empty().add(entry(1, thumb = "t1")).add(entry(2))
+        assertEquals(setOf("blob1", "t1", "blob2"), idx.blobIds())
+    }
+
     @Test fun findBySha256() {
         val idx = VaultIndex.empty()
             .add(entry(1).copy(sha256 = "aa"))

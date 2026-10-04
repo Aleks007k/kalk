@@ -159,6 +159,7 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
     var section by remember { mutableStateOf(Section.MEDIA) }
     var toDelete by remember { mutableStateOf<VaultEntry?>(null) }
     var noPermission by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
 
     var columns by remember { mutableIntStateOf(UiPrefs.gridColumns(context)) }
     fun changeColumns(step: Int) {
@@ -480,6 +481,9 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                         modifier = Modifier.weight(1f),
                     )
                     Spacer(Modifier.width(4.dp))
+                    RoundIconButton(onClick = { showSettings = true }, size = 44.dp) {
+                        GearIcon(modifier = Modifier.size(24.dp), color = palette.displaySecondary)
+                    }
                     TextButton(onClick = onLock) {
                         Text(text = stringResource(R.string.vault_lock), color = palette.opBg, fontSize = 17.sp)
                     }
@@ -611,20 +615,34 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
             }
         }
 
+        // Настройки — поверх сетки (её состояние сохраняется).
+        if (showSettings) {
+            FullScreenLayer {
+                SettingsScreen(
+                    app = app,
+                    session = session,
+                    palette = palette,
+                    onClose = { showSettings = false },
+                )
+            }
+        }
+
         // Редактор заметки — поверх сетки или просмотра (их состояние сохраняется).
         val edit = editing
         if (edit != null) {
             key(edit.token) {
-                NoteEditorScreen(
-                    title = edit.title,
-                    initialText = edit.text,
-                    palette = palette,
-                    onSave = { text -> saveNote(text) },
-                    onClose = {
-                        editing = null
-                        editingNoteId = null
-                    },
-                )
+                FullScreenLayer {
+                    NoteEditorScreen(
+                        title = edit.title,
+                        initialText = edit.text,
+                        palette = palette,
+                        onSave = { text -> saveNote(text) },
+                        onClose = {
+                            editing = null
+                            editingNoteId = null
+                        },
+                    )
+                }
             }
         }
 
@@ -852,6 +870,7 @@ private fun SectionTab(
             fontSize = 15.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

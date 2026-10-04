@@ -77,6 +77,17 @@ class VaultStorage(private val baseDir: File) {
         }
     }
 
+    /**
+     * Удаляет оглавления всех тайников, кроме тех, чьи мастер-ключи переданы
+     * (остатки прежнего второго тайника после замены).
+     */
+    fun deleteIndexesExcept(vararg keepKeys: ByteArray) {
+        val keep = keepKeys.map { indexFile(it).name }.toSet()
+        baseDir.listFiles()
+            ?.filter { it.isFile && it.name.startsWith("index_") && it.name.endsWith(".bin") && it.name !in keep }
+            ?.forEach { it.delete() }
+    }
+
     /** Имя файла оглавления: HMAC от мастер-ключа. Без ключа имя ничего не говорит. */
     private fun indexFile(masterKey: ByteArray): File {
         val mac = Mac.getInstance("HmacSHA256")
@@ -155,6 +166,19 @@ class VaultStorage(private val baseDir: File) {
     fun deleteBlob(blobId: String): Boolean = File(blobsDir, blobId).delete()
 
     fun blobExists(blobId: String): Boolean = File(blobsDir, blobId).exists()
+
+    /**
+     * Удаляет зашифрованные файлы, которых нет в [keep] и которые записаны
+     * раньше [olderThanMs]: совсем свежий файл может принадлежать операции,
+     * которая ещё не успела записать оглавление. Возвращает число удалённых.
+     */
+    fun deleteBlobsExcept(keep: Set<String>, olderThanMs: Long): Int {
+        var deleted = 0
+        blobsDir.listFiles()?.forEach { f ->
+            if (f.isFile && f.name !in keep && f.lastModified() < olderThanMs && f.delete()) deleted++
+        }
+        return deleted
+    }
 
     /** Есть ли в хранилище хоть один зашифрованный файл. */
     fun hasBlobs(): Boolean = blobsDir.listFiles()?.isNotEmpty() == true
