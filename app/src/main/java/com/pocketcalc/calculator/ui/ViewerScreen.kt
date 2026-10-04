@@ -82,6 +82,10 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.concurrent.Executors
 
+/** Ключи пустых страниц до первого и после последнего файла. */
+private const val EDGE_START = "edge:start"
+private const val EDGE_END = "edge:end"
+
 /** Фото больше этого размера не открываются в памяти (их можно восстановить). */
 private const val MAX_PHOTO_BYTES = 200L * 1024 * 1024
 
@@ -112,9 +116,12 @@ fun ViewerScreen(
     onEditNote: (VaultEntry, String) -> Unit,
 ) {
     val startIndex = remember { entries.indexOfFirst { it.id == startEntryId }.coerceAtLeast(0) }
-    val pagerState = rememberPagerState(initialPage = startIndex) { entries.size }
+    // До первого и после последнего файла — пустые страницы-«края»: если
+    // долистать до такой страницы, просмотр закрывается и видна сетка.
+    // Страница p показывает файл entries[p − 1].
+    val pagerState = rememberPagerState(initialPage = startIndex + 1) { entries.size + 2 }
     var chromeVisible by remember { mutableStateOf(true) }
-    val current = entries.getOrNull(pagerState.currentPage)
+    val current = entries.getOrNull(pagerState.currentPage - 1)
 
     BackHandler(enabled = canClose) { onClose(current?.id) }
     ViewerSystemBars(hidden = !chromeVisible)
@@ -122,6 +129,17 @@ fun ViewerScreen(
     // Удалили или вернули последний файл — смотреть больше нечего.
     LaunchedEffect(entries.isEmpty()) {
         if (entries.isEmpty()) onClose(null)
+    }
+
+    // Долистали за край — назад к сетке (к первому или последнему файлу).
+    LaunchedEffect(pagerState.settledPage, entries.size, canClose) {
+        val settled = pagerState.settledPage
+        if (canClose && entries.isNotEmpty()) {
+            when (settled) {
+                0 -> onClose(entries.first().id)
+                entries.size + 1 -> onClose(entries.last().id)
+            }
+        }
     }
 
     Box(
@@ -133,37 +151,48 @@ fun ViewerScreen(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             beyondViewportPageCount = 1,
-            key = { index -> entries[index].id },
+            key = { index ->
+                when (index) {
+                    0 -> EDGE_START
+                    entries.size + 1 -> EDGE_END
+                    else -> entries[index - 1].id
+                }
+            },
         ) { page ->
-            val entry = entries[page]
-            val toggleChrome = { chromeVisible = !chromeVisible }
-            when (entry.kind) {
-                EntryKind.PHOTO -> PhotoPage(entry, repository, session, thumbCache, onTap = toggleChrome)
-                EntryKind.VIDEO -> VideoPage(
-                    entry = entry,
-                    repository = repository,
-                    session = session,
-                    placeholder = rememberThumbnail(entry, repository, session, thumbCache),
-                    active = pagerState.settledPage == page,
-                    chromeVisible = chromeVisible,
-                    onTap = toggleChrome,
-                    onChromeVisible = { chromeVisible = it },
-                )
-                EntryKind.PDF -> PdfPage(
-                    entry = entry,
-                    repository = repository,
-                    session = session,
-                    tmpDir = docTmpDir,
-                    chromeVisible = chromeVisible,
-                    onTap = toggleChrome,
-                )
-                EntryKind.NOTE -> NotePage(
-                    entry = entry,
-                    repository = repository,
-                    session = session,
-                    onEdit = { text -> onEditNote(entry, text) },
-                )
-                EntryKind.OTHER -> FilePage(entry, onTap = toggleChrome)
+            val entry = entries.getOrNull(page - 1)
+            if (entry == null) {
+                // Страница-«край»: пусто, сейчас закроется.
+                Box(modifier = Modifier.fillMaxSize())
+            } else {
+                val toggleChrome = { chromeVisible = !chromeVisible }
+                when (entry.kind) {
+                    EntryKind.PHOTO -> PhotoPage(entry, repository, session, thumbCache, onTap = toggleChrome)
+                    EntryKind.VIDEO -> VideoPage(
+                        entry = entry,
+                        repository = repository,
+                        session = session,
+                        placeholder = rememberThumbnail(entry, repository, session, thumbCache),
+                        active = pagerState.settledPage == page,
+                        chromeVisible = chromeVisible,
+                        onTap = toggleChrome,
+                        onChromeVisible = { chromeVisible = it },
+                    )
+                    EntryKind.PDF -> PdfPage(
+                        entry = entry,
+                        repository = repository,
+                        session = session,
+                        tmpDir = docTmpDir,
+                        chromeVisible = chromeVisible,
+                        onTap = toggleChrome,
+                    )
+                    EntryKind.NOTE -> NotePage(
+                        entry = entry,
+                        repository = repository,
+                        session = session,
+                        onEdit = { text -> onEditNote(entry, text) },
+                    )
+                    EntryKind.OTHER -> FilePage(entry, onTap = toggleChrome)
+                }
             }
         }
 
