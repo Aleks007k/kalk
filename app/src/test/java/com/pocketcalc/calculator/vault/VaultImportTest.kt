@@ -327,6 +327,80 @@ class VaultImportTest {
         }
     }
 
+    @Test fun foldersCanBeCreatedAndRenamed() {
+        val (repo, s, _) = newVault()
+        val folder = repo.createFolder(s, "  Отпуск  ")
+        assertEquals("Отпуск", folder.name)
+        assertTrue(repo.renameFolder(s, folder.id, "Море"))
+        assertEquals(listOf("Море"), repo.loadIndex(s)!!.folders.map { it.name })
+        assertFalse(repo.renameFolder(s, "нет такой", "X"))
+    }
+
+    @Test fun blankFolderNameIsRefused() {
+        val (repo, s, _) = newVault()
+        try {
+            repo.createFolder(s, "   ")
+            fail("пустое название должно быть запрещено")
+        } catch (e: IllegalArgumentException) {
+            // ожидаемо
+        }
+        assertEquals(0, repo.loadIndex(s)!!.folders.size)
+    }
+
+    @Test fun importGoesIntoChosenFolder() {
+        val (repo, s, _) = newVault()
+        val folder = repo.createFolder(s, "Отпуск")
+        val inFolder = (repo.importFile(s, ByteArrayInputStream(photo(1)), ImportMeta("a.jpg", "image/jpeg"), null, folderId = folder.id)
+            as ImportResult.Added).entry
+        assertEquals(folder.id, inFolder.folderId)
+        // Несуществующая папка — файл попадает в общую сетку, а не теряется.
+        val lost = (repo.importFile(s, ByteArrayInputStream(photo(2)), ImportMeta("b.jpg", "image/jpeg"), null, folderId = "нет такой")
+            as ImportResult.Added).entry
+        assertNull(lost.folderId)
+    }
+
+    @Test fun moveBetweenFolderAndMainGrid() {
+        val (repo, s, _) = newVault()
+        val folder = repo.createFolder(s, "Отпуск")
+        val e = (repo.importFile(s, ByteArrayInputStream(photo(3)), ImportMeta("c.jpg", "image/jpeg"), null)
+            as ImportResult.Added).entry
+        assertTrue(repo.moveToFolder(s, e.id, folder.id))
+        assertEquals(folder.id, repo.loadIndex(s)!!.find(e.id)!!.folderId)
+        assertTrue(repo.moveToFolder(s, e.id, null))
+        assertNull(repo.loadIndex(s)!!.find(e.id)!!.folderId)
+        // В несуществующую папку и несуществующий файл — отказ без изменений.
+        assertFalse(repo.moveToFolder(s, e.id, "нет такой"))
+        assertFalse(repo.moveToFolder(s, "нет такого", folder.id))
+        assertNull(repo.loadIndex(s)!!.find(e.id)!!.folderId)
+    }
+
+    @Test fun deletingFolderKeepsFiles() {
+        val (repo, s, dir) = newVault()
+        val folder = repo.createFolder(s, "Отпуск")
+        val data = photo(4)
+        val e = (repo.importFile(s, ByteArrayInputStream(data), ImportMeta("d.jpg", "image/jpeg"), null, folderId = folder.id)
+            as ImportResult.Added).entry
+        val blobsBefore = blobCount(dir)
+        assertTrue(repo.deleteFolder(s, folder.id))
+        val index = repo.loadIndex(s)!!
+        assertEquals(0, index.folders.size)
+        assertNull(index.find(e.id)!!.folderId)
+        assertEquals(blobsBefore, blobCount(dir))
+        assertArrayEquals(data, repo.openContent(s, index.find(e.id)!!).use { it.readBytes() })
+        assertFalse(repo.deleteFolder(s, folder.id))
+    }
+
+    @Test fun foldersSurviveReopeningWithPin() {
+        val (repo, s, _) = newVault()
+        val folder = repo.createFolder(s, "Отпуск")
+        repo.importFile(s, ByteArrayInputStream(photo(5)), ImportMeta("e.jpg", "image/jpeg"), null, folderId = folder.id)
+        s.close()
+        val again = repo.unlockWithPin("48291375".toCharArray(), gate)!!
+        val index = repo.loadIndex(again)!!
+        assertEquals(listOf(folder), index.folders)
+        assertEquals(folder.id, index.entries.single().folderId)
+    }
+
     @Test fun importWithoutDedupeCreatesNewEntry() {
         val (repo, s, _) = newVault()
         val empty = ByteArray(0)

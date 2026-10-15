@@ -35,6 +35,9 @@ enum class EntryKind {
  *
  * [origFolder] — папка, где лежал оригинал (например, `DCIM/Camera/`): туда
  * файл возвращается при восстановлении. Пусто — неизвестно.
+ *
+ * [folderId] — папка тайника, в которой лежит файл (см. [VaultFolder]);
+ * null — файл в общей сетке.
  */
 data class VaultEntry(
     val id: String,
@@ -49,10 +52,34 @@ data class VaultEntry(
     val takenAt: Long = 0,
     val durationMs: Long = 0,
     val origFolder: String = "",
+    val folderId: String? = null,
 )
 
+/** Папка в разделе «Фото и видео». Название — только в зашифрованном оглавлении. */
+data class VaultFolder(
+    val id: String,
+    val name: String,
+    val createdAt: Long,
+) {
+    companion object {
+        /** Самое длинное название папки. */
+        const val MAX_NAME = 40
+
+        /** Название в одну строку, без лишних пробелов и не длиннее [MAX_NAME]. */
+        fun cleanName(name: String): String {
+            var s = name.replace(Regex("\\s+"), " ").trim()
+            if (s.length > MAX_NAME) {
+                s = s.take(MAX_NAME)
+                // Не разрезаем пару символов (например, эмодзи) пополам.
+                if (s.last().isHighSurrogate()) s = s.dropLast(1)
+            }
+            return s.trim()
+        }
+    }
+}
+
 /**
- * Оглавление одного тайника: список записей и две пометки.
+ * Оглавление одного тайника: список записей, папки и две пометки.
  *
  * [isDecoy] — это фальшивый тайник (его создал настоящий). В нём не
  * показывается настройка фальшивого PIN: иначе тот, кому его открыли,
@@ -65,6 +92,7 @@ data class VaultIndex(
     val entries: List<VaultEntry>,
     val isDecoy: Boolean = false,
     val hasDecoy: Boolean = false,
+    val folders: List<VaultFolder> = emptyList(),
 ) {
 
     fun add(entry: VaultEntry): VaultIndex = copy(entries = entries + entry)
@@ -83,16 +111,34 @@ data class VaultIndex(
     fun findBySha256(sha256: String): VaultEntry? =
         if (sha256.isEmpty()) null else entries.firstOrNull { it.sha256 == sha256 }
 
+    fun findFolder(folderId: String): VaultFolder? = folders.firstOrNull { it.id == folderId }
+
+    fun addFolder(folder: VaultFolder): VaultIndex = copy(folders = folders + folder)
+
+    fun renameFolder(folderId: String, name: String): VaultIndex =
+        copy(folders = folders.map { if (it.id == folderId) it.copy(name = name) else it })
+
+    /** Убирает папку. Файлы из неё не удаляются — они возвращаются в общую сетку. */
+    fun removeFolder(folderId: String): VaultIndex = copy(
+        folders = folders.filterNot { it.id == folderId },
+        entries = entries.map { if (it.folderId == folderId) it.copy(folderId = null) else it },
+    )
+
+    /** Переносит запись в папку ([folderId] = null — в общую сетку). */
+    fun moveEntry(entryId: String, folderId: String?): VaultIndex =
+        copy(entries = entries.map { if (it.id == entryId) it.copy(folderId = folderId) else it })
+
     companion object {
         /**
          * Версии формата:
          *  1 — первая (этап 2–3);
          *  2 — добавлены отпечаток содержимого, дата съёмки и длительность видео;
          *  3 — добавлена исходная папка файла (для восстановления);
-         *  4 — пометки «фальшивый тайник» и «задан фальшивый PIN».
+         *  4 — пометки «фальшивый тайник» и «задан фальшивый PIN»;
+         *  5 — папки: их список и папка у каждой записи.
          * Старые версии читаются всегда: обновление приложения не должно ломать тайник.
          */
-        private const val VERSION = 4
+        private const val VERSION = 5
 
         private const val FLAG_DECOY = 1
         private const val FLAG_HAS_DECOY = 2
@@ -125,12 +171,21 @@ data class VaultIndex(
                     out.writeLong(e.durationMs)
                     // версия 3
                     out.writeUTF(e.origFolder)
+                    // версия 5 (пусто — общая сетка)
+                    out.writeUTF(e.folderId ?: "")
+                }
+                // версия 5
+                out.writeInt(index.folders.size)
+                for (f in index.folders) {
+                    out.writeUTF(f.id)
+                    out.writeUTF(f.name)
+                    out.writeLong(f.createdAt)
                 }
             }
             return bos.toByteArray()
         }
 
-        /** Восстанавливает оглавление из байтов (после расшифровки). Понимает версии 1–4. */
+        /** Восстанавливает оглавление из байтов (после расшифровки). Понимает версии 1–5. */
         fun deserialize(bytes: ByteArray): VaultIndex {
             DataInputStream(ByteArrayInputStream(bytes)).use { input ->
                 val version = input.readInt()
@@ -157,17 +212,27 @@ data class VaultIndex(
                         durationMs = input.readLong()
                     }
                     val origFolder = if (version >= 3) input.readUTF() else ""
+                    val folderId = if (version >= 5) input.readUTF().ifEmpty { null } else null
                     list.add(
                         VaultEntry(
                             id, name, mime, kind, size, addedAt, blobId, thumbId,
-                            sha256, takenAt, durationMs, origFolder,
+                            sha256, takenAt, durationMs, origFolder, folderId,
                         )
                     )
                 }
+                val folders = ArrayList<VaultFolder>()
+                if (version >= 5) {
+                    repeat(input.readInt()) {
+                        folders.add(VaultFolder(input.readUTF(), input.readUTF(), input.readLong()))
+                    }
+                }
+                // Запись из несуществующей папки показываем в общей сетке, а не теряем.
+                val folderIds = folders.mapTo(HashSet()) { it.id }
                 return VaultIndex(
-                    entries = list,
+                    entries = list.map { if (it.folderId != null && it.folderId !in folderIds) it.copy(folderId = null) else it },
                     isDecoy = flags and FLAG_DECOY != 0,
                     hasDecoy = flags and FLAG_HAS_DECOY != 0,
+                    folders = folders,
                 )
             }
         }

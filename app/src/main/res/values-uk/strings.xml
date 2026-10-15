@@ -127,4 +127,26 @@
     <string name="decoy_is_real_pin">Це PIN-код справжнього сховища. Фальшивий має бути іншим.</string>
     <string name="decoy_done">Фальшивий PIN задано</string>
     <string name="decoy_removed">Фальшивий PIN прибрано</string>
+
+    <!-- Папки в «Фото и видео» -->
+    <string name="folders_header">Папки</string>
+    <string name="folder_new_button">+ Папка</string>
+    <string name="folder_new_title">Нова папка</string>
+    <string name="folder_name_hint">Назва папки</string>
+    <string name="folder_create">Створити</string>
+    <string name="folder_rename">Перейменувати</string>
+    <string name="folder_rename_title">Нова назва</string>
+    <string name="folder_save">Зберегти</string>
+    <string name="folder_name_taken">Папка з такою назвою вже є</string>
+    <string name="folder_delete">Видалити папку</string>
+    <string name="folder_delete_title">Видалити папку «%1$s»?</string>
+    <string name="folder_delete_text">Файли з неї (%1$d) не видаляться: вони повернуться до «Фото й відео».</string>
+    <string name="folder_empty_title">Папка порожня</string>
+    <string name="folder_empty_text">Натисніть «+ Фото й відео», щоб додати файли просто сюди. Або перенесіть уже сховані: довге натискання на фото → «Перемістити».</string>
+    <string name="entry_move">Перемістити</string>
+    <string name="move_title">Перемістити до…</string>
+    <string name="move_to_main">Фото й відео (без папки)</string>
+    <string name="move_new_folder">+ Нова папка</string>
+    <string name="moved_to">Переміщено до «%1$s»</string>
+    <string name="action_failed">Не вдалося. Спробуйте ще раз.</string>
 </resources>

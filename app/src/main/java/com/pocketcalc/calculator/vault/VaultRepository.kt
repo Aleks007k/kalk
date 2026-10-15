@@ -253,6 +253,8 @@ class VaultRepository(
         thumbnailJpeg: ByteArray?,
         /** false — не искать такой же файл в тайнике (новая заметка — всегда новая запись). */
         dedupe: Boolean = true,
+        /** Папка тайника для нового файла; null или несуществующая — общая сетка. */
+        folderId: String? = null,
     ): ImportResult = withKeyCopy(session) { key ->
         val stored = storage.storeBlob(key, input, meta.size)
         var thumbId: String? = null
@@ -278,6 +280,7 @@ class VaultRepository(
                     takenAt = meta.takenAt,
                     durationMs = meta.durationMs,
                     origFolder = meta.origFolder,
+                    folderId = folderId?.takeIf { index.findFolder(it) != null },
                 )
                 storage.saveIndex(key, index.add(entry))
                 ImportResult.Added(entry)
@@ -408,6 +411,67 @@ class VaultRepository(
             true
         }
     }
+
+    // --- Папки ------------------------------------------------------------
+
+    /** Создаёт папку в разделе «Фото и видео». Пустое название не принимается. */
+    fun createFolder(
+        session: VaultSession,
+        name: String,
+        now: Long = System.currentTimeMillis(),
+    ): VaultFolder {
+        val clean = VaultFolder.cleanName(name)
+        require(clean.isNotEmpty()) { "пустое название папки" }
+        val folder = VaultFolder(AtomicFiles.randomHex(16), clean, now)
+        updateIndex(session) { it.addFolder(folder) }
+        return folder
+    }
+
+    /** Новое название папки. false — папки нет. */
+    fun renameFolder(session: VaultSession, folderId: String, name: String): Boolean {
+        val clean = VaultFolder.cleanName(name)
+        require(clean.isNotEmpty()) { "пустое название папки" }
+        return updateIndex(session) { index ->
+            if (index.findFolder(folderId) == null) null else index.renameFolder(folderId, clean)
+        }
+    }
+
+    /**
+     * Удаляет папку. Файлы из неё не удаляются: они возвращаются в общую
+     * сетку. false — папки нет.
+     */
+    fun deleteFolder(session: VaultSession, folderId: String): Boolean = updateIndex(session) { index ->
+        if (index.findFolder(folderId) == null) null else index.removeFolder(folderId)
+    }
+
+    /**
+     * Переносит файл в папку ([folderId] = null — в общую сетку). Сам файл
+     * не перешифровывается: меняется только запись в оглавлении.
+     * false — нет такого файла или такой папки.
+     */
+    fun moveToFolder(session: VaultSession, entryId: String, folderId: String?): Boolean =
+        updateIndex(session) { index ->
+            when {
+                index.find(entryId) == null -> null
+                folderId != null && index.findFolder(folderId) == null -> null
+                else -> index.moveEntry(entryId, folderId)
+            }
+        }
+
+    /**
+     * «Прочитать → изменить → сохранить» оглавление под общим замком.
+     * [change] возвращает новое оглавление или null — тогда ничего не
+     * сохраняется и результат false.
+     */
+    private fun updateIndex(session: VaultSession, change: (VaultIndex) -> VaultIndex?): Boolean =
+        withKeyCopy(session) { key ->
+            synchronized(indexLock) {
+                val index = storage.loadIndex(key) ?: error("оглавление повреждено")
+                val updated = change(index) ?: return@withKeyCopy false
+                storage.saveIndex(key, updated)
+                true
+            }
+        }
 
     /**
      * Выполняет [block] с копией мастер-ключа и затирает копию после.

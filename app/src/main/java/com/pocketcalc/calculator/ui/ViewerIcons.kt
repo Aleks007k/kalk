@@ -104,6 +104,18 @@ internal fun GearIcon(modifier: Modifier = Modifier, color: Color = Color.White)
     }
 }
 
+/** Папка: корпус и язычок сверху слева. */
+@Composable
+internal fun FolderIcon(modifier: Modifier = Modifier, color: Color = Color.White) {
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val corner = CornerRadius(w * 0.08f)
+        drawRoundRect(color, Offset(w * 0.06f, h * 0.16f), Size(w * 0.4f, h * 0.2f), corner)
+        drawRoundRect(color, Offset(w * 0.06f, h * 0.26f), Size(w * 0.88f, h * 0.6f), corner)
+    }
+}
+
 /** «Играть» (треугольник) или «пауза» (две полосы). */
 @Composable
 internal fun PlayPauseIcon(showPause: Boolean, modifier: Modifier = Modifier, color: Color = Color.White) {

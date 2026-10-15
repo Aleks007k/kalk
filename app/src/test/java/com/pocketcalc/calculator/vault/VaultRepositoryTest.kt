@@ -264,6 +264,21 @@ class VaultRepositoryTest {
         assertEquals("оглавлений по-прежнему два", 2, indexCount(dir))
     }
 
+    @Test fun decoyKeepsRealFoldersAndHasNone() {
+        val r = repo()
+        val real = setUp(r)
+        val folder = r.createFolder(real, "Отпуск")
+        val e = addFile(r, real, 1)
+        r.moveToFolder(real, e.id, folder.id)
+        r.setDecoyPin(real, decoyPin.toCharArray(), gate, now = later())
+
+        val realIndex = r.loadIndex(real)!!
+        assertEquals(listOf(folder), realIndex.folders)
+        assertEquals(folder.id, realIndex.find(e.id)!!.folderId)
+        val decoy = r.unlockWithPin(decoyPin.toCharArray(), gate)!!
+        assertEquals(0, r.loadIndex(decoy)!!.folders.size)
+    }
+
     @Test fun decoyPinMustDifferFromRealPin() {
         val dir = newDir()
         val r = repo(dir)

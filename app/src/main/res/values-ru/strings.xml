@@ -127,4 +127,26 @@
     <string name="decoy_is_real_pin">Это PIN-код настоящего тайника. Фальшивый должен быть другим.</string>
     <string name="decoy_done">Фальшивый PIN задан</string>
     <string name="decoy_removed">Фальшивый PIN убран</string>
+
+    <!-- Папки в «Фото и видео» -->
+    <string name="folders_header">Папки</string>
+    <string name="folder_new_button">+ Папка</string>
+    <string name="folder_new_title">Новая папка</string>
+    <string name="folder_name_hint">Название папки</string>
+    <string name="folder_create">Создать</string>
+    <string name="folder_rename">Переименовать</string>
+    <string name="folder_rename_title">Новое название</string>
+    <string name="folder_save">Сохранить</string>
+    <string name="folder_name_taken">Папка с таким названием уже есть</string>
+    <string name="folder_delete">Удалить папку</string>
+    <string name="folder_delete_title">Удалить папку «%1$s»?</string>
+    <string name="folder_delete_text">Файлы из неё (%1$d) не удалятся: они вернутся в «Фото и видео».</string>
+    <string name="folder_empty_title">Папка пуста</string>
+    <string name="folder_empty_text">Нажмите «+ Фото и видео», чтобы добавить файлы прямо сюда. Или перенесите уже спрятанные: долгое нажатие на фото → «Переместить».</string>
+    <string name="entry_move">Переместить</string>
+    <string name="move_title">Переместить в…</string>
+    <string name="move_to_main">Фото и видео (без папки)</string>
+    <string name="move_new_folder">+ Новая папка</string>
+    <string name="moved_to">Перемещено в «%1$s»</string>
+    <string name="action_failed">Не получилось. Попробуйте ещё раз.</string>
 </resources>

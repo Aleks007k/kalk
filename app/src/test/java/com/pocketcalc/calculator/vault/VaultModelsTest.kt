@@ -163,6 +163,76 @@ class VaultModelsTest {
         assertEquals(false, index.hasDecoy)
     }
 
+    @Test fun version5FoldersRoundTrip() {
+        val folder = VaultFolder("f1", "Отпуск 🌴", 1_700_000_000_000L)
+        val idx = VaultIndex(listOf(entry(1).copy(folderId = "f1"), entry(2)), folders = listOf(folder))
+        val back = roundTrip(idx)
+        assertEquals(listOf(folder), back.folders)
+        assertEquals("f1", back.find("id1")!!.folderId)
+        assertNull(back.find("id2")!!.folderId)
+    }
+
+    @Test fun olderIndexesHaveNoFolders() {
+        // Оглавление версии 4 (как у версии 0.8.0): папок нет, все файлы в общей сетке.
+        val bos = java.io.ByteArrayOutputStream()
+        java.io.DataOutputStream(bos).use { out ->
+            out.writeInt(4)            // версия
+            out.writeInt(0)            // пометки
+            out.writeInt(1)            // одна запись
+            out.writeUTF("id1")
+            out.writeUTF("IMG_1.jpg")
+            out.writeUTF("image/jpeg")
+            out.writeInt(EntryKind.PHOTO.ordinal)
+            out.writeLong(123)
+            out.writeLong(456)
+            out.writeUTF("blob1")
+            out.writeBoolean(false)
+            out.writeUTF("")
+            out.writeLong(0)
+            out.writeLong(0)
+            out.writeUTF("DCIM/Camera/")
+        }
+        val index = VaultIndex.deserialize(bos.toByteArray())
+        assertEquals(0, index.folders.size)
+        assertNull(index.find("id1")!!.folderId)
+        assertEquals("DCIM/Camera/", index.find("id1")!!.origFolder)
+    }
+
+    @Test fun fileFromMissingFolderGoesToMainGrid() {
+        val idx = VaultIndex(listOf(entry(1).copy(folderId = "нет такой")))
+        assertNull(roundTrip(idx).find("id1")!!.folderId)
+    }
+
+    @Test fun removingFolderKeepsItsFiles() {
+        val idx = VaultIndex(
+            listOf(entry(1).copy(folderId = "a"), entry(2).copy(folderId = "b"), entry(3)),
+            folders = listOf(VaultFolder("a", "A", 1), VaultFolder("b", "B", 2)),
+        )
+        val after = idx.removeFolder("a")
+        assertEquals(listOf("b"), after.folders.map { it.id })
+        assertEquals(3, after.entries.size)
+        assertNull(after.find("id1")!!.folderId)
+        assertEquals("b", after.find("id2")!!.folderId)
+    }
+
+    @Test fun moveAndRenameKeepOrder() {
+        val idx = VaultIndex(listOf(entry(1), entry(2)), folders = listOf(VaultFolder("a", "A", 1)))
+        val moved = idx.moveEntry("id2", "a").renameFolder("a", "Новое")
+        assertEquals(listOf("id1", "id2"), moved.entries.map { it.id })
+        assertEquals("a", moved.find("id2")!!.folderId)
+        assertEquals("Новое", moved.findFolder("a")!!.name)
+        assertNull(moved.moveEntry("id2", null).find("id2")!!.folderId)
+    }
+
+    @Test fun folderNamesAreCleaned() {
+        assertEquals("Отпуск 2025", VaultFolder.cleanName("  Отпуск\n\t 2025  "))
+        assertEquals(VaultFolder.MAX_NAME, VaultFolder.cleanName("я".repeat(100)).length)
+        assertEquals("", VaultFolder.cleanName("   "))
+        // Эмодзи на границе длины не режется пополам.
+        val cut = VaultFolder.cleanName("я".repeat(VaultFolder.MAX_NAME - 1) + "🌴")
+        assertEquals(false, cut.last().isHighSurrogate())
+    }
+
     @Test fun blobIdsIncludeThumbnails() {
         val idx = VaultIndex.empty().add(entry(1, thumb = "t1")).add(entry(2))
         assertEquals(setOf("blob1", "t1", "blob2"), idx.blobIds())

@@ -127,4 +127,26 @@
     <string name="decoy_is_real_pin">This is the PIN of your real vault. The decoy PIN must be different.</string>
     <string name="decoy_done">Decoy PIN set</string>
     <string name="decoy_removed">Decoy PIN removed</string>
+
+    <!-- Folders in "Photos & videos" -->
+    <string name="folders_header">Folders</string>
+    <string name="folder_new_button">+ Folder</string>
+    <string name="folder_new_title">New folder</string>
+    <string name="folder_name_hint">Folder name</string>
+    <string name="folder_create">Create</string>
+    <string name="folder_rename">Rename</string>
+    <string name="folder_rename_title">New name</string>
+    <string name="folder_save">Save</string>
+    <string name="folder_name_taken">A folder with this name already exists</string>
+    <string name="folder_delete">Delete folder</string>
+    <string name="folder_delete_title">Delete folder “%1$s”?</string>
+    <string name="folder_delete_text">Its files (%1$d) won’t be deleted: they go back to “Photos &amp; videos”.</string>
+    <string name="folder_empty_title">This folder is empty</string>
+    <string name="folder_empty_text">Tap “+ Photos &amp; videos” to add files right here. Or move hidden ones: long-press a photo → “Move”.</string>
+    <string name="entry_move">Move</string>
+    <string name="move_title">Move to…</string>
+    <string name="move_to_main">Photos &amp; videos (no folder)</string>
+    <string name="move_new_folder">+ New folder</string>
+    <string name="moved_to">Moved to “%1$s”</string>
+    <string name="action_failed">That didn’t work. Please try again.</string>
 </resources>

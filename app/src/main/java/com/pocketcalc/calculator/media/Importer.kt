@@ -31,12 +31,16 @@ object Importer {
     /** Миниатюры крупные, чтобы и в две колонки сетка была чёткой. */
     private const val THUMB_SIZE_PX = 512
 
-    /** Фото и видео из галереи. [onProgress] вызывается в главном потоке. */
+    /**
+     * Фото и видео из галереи — в общую сетку или в папку тайника [folderId].
+     * [onProgress] вызывается в главном потоке.
+     */
     suspend fun importMedia(
         context: Context,
         repository: VaultRepository,
         session: VaultSession,
         items: List<MediaItem>,
+        folderId: String? = null,
         onProgress: (done: Int, total: Int) -> Unit,
     ): ImportSummary = importAll(session, items.size, onProgress) { index ->
         val item = items[index]
@@ -50,7 +54,7 @@ object Importer {
             origFolder = item.relativePath,
         )
         val result = MediaGallery.openOriginal(context, item.uri)?.use { input ->
-            repository.importFile(session, input, meta, thumb)
+            repository.importFile(session, input, meta, thumb, folderId = folderId)
         } ?: throw IOException("не удалось открыть файл")
         result to item.uri
     }
