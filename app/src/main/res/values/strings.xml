@@ -149,4 +149,15 @@
     <string name="move_new_folder">+ New folder</string>
     <string name="moved_to">Moved to “%1$s”</string>
     <string name="action_failed">That didn’t work. Please try again.</string>
+
+    <!-- Why a file was not added; days in the picker -->
+    <string name="import_failed_line">• %1$s — %2$s</string>
+    <string name="import_failed_more">…and %1$d more</string>
+    <string name="import_reason_open">couldn’t open: the file was moved, deleted or isn’t available</string>
+    <string name="import_reason_changed">the file changed while being read — please try again</string>
+    <string name="import_reason_space">not enough free space on the phone</string>
+    <string name="import_reason_verify">the check failed — please try again</string>
+    <string name="import_reason_other">read error (code %1$s)</string>
+    <string name="picker_today">Today</string>
+    <string name="picker_yesterday">Yesterday</string>
 </resources>

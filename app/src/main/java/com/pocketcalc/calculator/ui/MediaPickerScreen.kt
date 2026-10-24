@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
@@ -47,17 +48,25 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pocketcalc.calculator.R
+import com.pocketcalc.calculator.media.DayGroup
 import com.pocketcalc.calculator.media.MediaGallery
 import com.pocketcalc.calculator.media.MediaItem
+import com.pocketcalc.calculator.media.groupByDay
 import com.pocketcalc.calculator.ui.theme.CalcPalette
 import com.pocketcalc.calculator.ui.theme.calcPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Date
+import java.util.Locale
 
 /**
- * Выбор фото и видео из памяти телефона: сетка миниатюр, нажатие отмечает,
- * «Спрятать» передаёт выбранное в тайник. Число колонок меняется щипком
- * ([columns], [onColumnsStep]) — так же, как в самом тайнике.
+ * Выбор фото и видео из памяти телефона. Как в Галерее: новые сверху,
+ * по дням — «Сегодня», «Вчера», дата; кружок у даты отмечает весь день.
+ * Нажатие на снимок отмечает его, «Спрятать» передаёт выбранное в тайник.
+ * Число колонок меняется щипком ([columns], [onColumnsStep]) — так же,
+ * как в самом тайнике.
  */
 @Composable
 fun MediaPickerScreen(
@@ -72,7 +81,9 @@ fun MediaPickerScreen(
     val context = LocalContext.current
 
     var mediaItems by remember { mutableStateOf<List<MediaItem>?>(null) }
+    var days by remember { mutableStateOf<List<DayGroup<MediaItem>>>(emptyList()) }
     var selected by remember { mutableStateOf(setOf<String>()) }
+    val today = remember { LocalDate.now() }
     val partial = remember { MediaGallery.isPartialAccess(context) }
     val thumbCache = remember { thumbnailCache(32 * 1024 * 1024) }
     // Миниатюра примерно в ширину плитки: чётко и без лишней памяти.
@@ -80,7 +91,12 @@ fun MediaPickerScreen(
     val thumbPx = (screenWidthPx / columns).toInt().coerceIn(128, 512)
 
     LaunchedEffect(Unit) {
-        mediaItems = withContext(Dispatchers.IO) { MediaGallery.load(context) }
+        val (all, grouped) = withContext(Dispatchers.IO) {
+            val loaded = MediaGallery.load(context)
+            loaded to groupByDay(loaded, ZoneId.systemDefault()) { it.takenAt }
+        }
+        days = grouped
+        mediaItems = all
     }
 
     Column(
@@ -154,18 +170,36 @@ fun MediaPickerScreen(
                     columns = GridCells.Fixed(columns),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    items(list, key = { it.uri.toString() }) { item ->
-                        val key = item.uri.toString()
-                        MediaCell(
-                            item = item,
-                            isSelected = key in selected,
-                            palette = palette,
-                            cache = thumbCache,
-                            thumbPx = thumbPx,
-                            onToggle = {
-                                selected = if (key in selected) selected - key else selected + key
-                            },
-                        )
+                    for (group in days) {
+                        item(
+                            key = "day-" + group.day,
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = "day",
+                        ) {
+                            val keys = group.items.map { it.uri.toString() }
+                            val allSelected = keys.all { it in selected }
+                            DayHeader(
+                                label = dayLabel(group.day, today),
+                                allSelected = allSelected,
+                                palette = palette,
+                                onToggleAll = {
+                                    selected = if (allSelected) selected - keys.toSet() else selected + keys
+                                },
+                            )
+                        }
+                        items(group.items, key = { it.uri.toString() }, contentType = { "media" }) { item ->
+                            val key = item.uri.toString()
+                            MediaCell(
+                                item = item,
+                                isSelected = key in selected,
+                                palette = palette,
+                                cache = thumbCache,
+                                thumbPx = thumbPx,
+                                onToggle = {
+                                    selected = if (key in selected) selected - key else selected + key
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -184,6 +218,66 @@ fun MediaPickerScreen(
             ) {
                 val chosen = mediaItems.orEmpty().filter { it.uri.toString() in selected }
                 onConfirm(chosen)
+            }
+        }
+    }
+}
+
+/** «Сегодня», «Вчера», «Пт, 17 окт.» или, для прошлых лет, «17 окт. 2025 г.». */
+@Composable
+private fun dayLabel(day: LocalDate, today: LocalDate): String = when (day) {
+    today -> stringResource(R.string.picker_today)
+    today.minusDays(1) -> stringResource(R.string.picker_yesterday)
+    else -> remember(day, today) { formatDay(day, today) }
+}
+
+private fun formatDay(day: LocalDate, today: LocalDate): String {
+    val locale = Locale.getDefault()
+    val skeleton = if (day.year == today.year) "EEEdMMM" else "yMMMd"
+    val date = Date.from(day.atStartOfDay(ZoneId.systemDefault()).toInstant())
+    val text = android.icu.text.DateFormat.getInstanceForSkeleton(skeleton, locale).format(date)
+    return text.replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() }
+}
+
+/** Заголовок дня: дата слева, справа кружок «отметить весь день». */
+@Composable
+private fun DayHeader(label: String, allSelected: Boolean, palette: CalcPalette, onToggleAll: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, top = 10.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            color = palette.displayPrimary,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onToggleAll),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (allSelected) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(palette.opBg),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = "✓", color = palette.opText, fontSize = 15.sp)
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .border(2.dp, palette.displaySecondary, CircleShape),
+                )
             }
         }
     }

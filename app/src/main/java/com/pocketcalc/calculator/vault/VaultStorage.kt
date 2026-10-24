@@ -124,11 +124,11 @@ class VaultStorage(private val baseDir: File) {
             val readSize = counting.count
             val readSha = digest.digest()
             if (expectedSize != null && readSize != expectedSize) {
-                error("проверка не прошла: прочитано $readSize байт вместо $expectedSize")
+                throw SizeMismatchException(readSize, expectedSize)
             }
             val (decryptedSize, decryptedSha) = digestDecrypted(tmp, masterKey, ad)
             if (decryptedSize != readSize || !MessageDigest.isEqual(decryptedSha, readSha)) {
-                error("проверка не прошла: расшифрованное не совпало с исходным")
+                throw VerificationFailedException()
             }
             AtomicFiles.moveReplace(tmp, File(blobsDir, blobId))
             return StoredBlob(blobId, readSize, readSha.toHex())
@@ -236,3 +236,14 @@ class VaultStorage(private val baseDir: File) {
 
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 }
+
+/**
+ * Прочитано не столько байт, сколько ожидалось: файл менялся во время чтения
+ * или прочитан не до конца. Добавление отменяется, оригинал остаётся на месте.
+ */
+class SizeMismatchException(val read: Long, val expected: Long) :
+    IllegalStateException("проверка не прошла: прочитано $read байт вместо $expected")
+
+/** При проверке расшифрованное не совпало с прочитанным. Добавление отменяется. */
+class VerificationFailedException :
+    IllegalStateException("проверка не прошла: расшифрованное не совпало с исходным")

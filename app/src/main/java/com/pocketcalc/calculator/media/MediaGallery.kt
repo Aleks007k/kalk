@@ -1,6 +1,7 @@
 package com.pocketcalc.calculator.media
 
 import android.Manifest
+import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
@@ -15,6 +16,8 @@ import android.provider.OpenableColumns
 import android.util.Size
 import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
+import java.io.Closeable
+import java.io.FileNotFoundException
 import java.io.InputStream
 
 /** Фото или видео из памяти телефона (галерея). */
@@ -30,6 +33,14 @@ data class MediaItem(
     /** Папка в памяти телефона, например "DCIM/Camera/" (Android 10+), иначе пусто. */
     val relativePath: String = "",
 )
+
+/**
+ * Открытый для чтения файл и его настоящий размер, узнанный по самому
+ * открытому файлу (null — система размер не сообщила).
+ */
+class OpenedFile(val input: InputStream, val size: Long?) : Closeable {
+    override fun close() = input.close()
+}
 
 /** Документ, выбранный в системном окне выбора файлов. */
 data class DocumentInfo(
@@ -148,20 +159,32 @@ object MediaGallery {
      * и [MediaStore.setRequireOriginal] система отдаёт файл без изменений.
      * Если так открыть не вышло — читаем как обычно (файл без геометки),
      * чтобы добавление всё равно работало.
+     *
+     * Размер берётся у самого открытого файла. Размер из базы галереи для
+     * проверки не годится: после правки снимка или его доработки камерой
+     * он бывает устаревшим, и исправные файлы ошибочно не добавлялись.
      */
-    fun openOriginal(context: Context, uri: Uri): InputStream? {
+    fun openOriginal(context: Context, uri: Uri): OpenedFile {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
             granted(context, Manifest.permission.ACCESS_MEDIA_LOCATION)
         ) {
             try {
-                return context.contentResolver.openInputStream(MediaStore.setRequireOriginal(uri))
-            } catch (e: SecurityException) {
-                // ниже — обычное чтение
-            } catch (e: UnsupportedOperationException) {
+                return openWithSize(context.contentResolver, MediaStore.setRequireOriginal(uri))
+            } catch (e: Exception) {
                 // ниже — обычное чтение
             }
         }
-        return context.contentResolver.openInputStream(uri)
+        return openWithSize(context.contentResolver, uri)
+    }
+
+    /** Открывает документ из системного окна выбора; размер — как у [openOriginal]. */
+    fun openDocument(context: Context, uri: Uri): OpenedFile = openWithSize(context.contentResolver, uri)
+
+    private fun openWithSize(resolver: ContentResolver, uri: Uri): OpenedFile {
+        val afd = resolver.openAssetFileDescriptor(uri, "r") ?: throw FileNotFoundException("не удалось открыть файл")
+        // Длина, которую сообщает сам открытый файл; -1 — неизвестна (например, данные идут потоком).
+        val length = afd.length
+        return OpenedFile(afd.createInputStream(), length.takeIf { it >= 0 })
     }
 
     /** Миниатюра фото/видео из системы (для сетки выбора и для тайника). */

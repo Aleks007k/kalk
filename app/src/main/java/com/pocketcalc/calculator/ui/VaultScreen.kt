@@ -73,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pocketcalc.calculator.CalcApp
 import com.pocketcalc.calculator.R
+import com.pocketcalc.calculator.media.ImportProblem
 import com.pocketcalc.calculator.media.ImportSummary
 import com.pocketcalc.calculator.media.Importer
 import com.pocketcalc.calculator.media.MediaGallery
@@ -97,6 +98,9 @@ import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+/** Сколько неудавшихся файлов перечислять в итоге добавления (остальные — числом). */
+private const val MAX_FAILURE_LINES = 5
 
 /** Раздел тайника: фото и видео — сеткой, остальное (PDF, заметки, документы) — списком. */
 private enum class Section { MEDIA, FILES }
@@ -958,6 +962,22 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
         val addedLine = stringResource(R.string.import_added, s.added)
         val duplicatesLine = if (s.duplicates > 0) stringResource(R.string.import_duplicates, s.duplicates) else null
         val failedLine = if (s.failed > 0) stringResource(R.string.import_failed, s.failed) else null
+        // Какие файлы не добавились и почему — чтобы было понятно, что делать.
+        val failureLines = s.failures.take(MAX_FAILURE_LINES).map { f ->
+            val reason = when (f.problem) {
+                ImportProblem.OPEN -> stringResource(R.string.import_reason_open)
+                ImportProblem.CHANGED -> stringResource(R.string.import_reason_changed)
+                ImportProblem.NO_SPACE -> stringResource(R.string.import_reason_space)
+                ImportProblem.VERIFY -> stringResource(R.string.import_reason_verify)
+                ImportProblem.OTHER -> stringResource(R.string.import_reason_other, f.code)
+            }
+            stringResource(R.string.import_failed_line, f.name, reason)
+        }
+        val moreFailedLine = if (s.failed > MAX_FAILURE_LINES) {
+            stringResource(R.string.import_failed_more, s.failed - MAX_FAILURE_LINES)
+        } else {
+            null
+        }
         val originalsLine = when (originalsDeleted) {
             true -> stringResource(R.string.import_originals_deleted)
             false -> stringResource(R.string.import_originals_kept)
@@ -968,7 +988,8 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
         } else {
             null
         }
-        val lines = listOfNotNull(addedLine, duplicatesLine, failedLine, originalsLine, docsFailedLine)
+        val lines = listOfNotNull(addedLine, duplicatesLine, failedLine) + failureLines +
+            listOfNotNull(moreFailedLine, originalsLine, docsFailedLine)
         AlertDialog(
             onDismissRequest = {},
             title = { Text(text = stringResource(R.string.import_done_title)) },

@@ -149,4 +149,15 @@
     <string name="move_new_folder">+ Нова папка</string>
     <string name="moved_to">Переміщено до «%1$s»</string>
     <string name="action_failed">Не вдалося. Спробуйте ще раз.</string>
+
+    <!-- Почему файл не добавился; дни в окне выбора -->
+    <string name="import_failed_line">• %1$s — %2$s</string>
+    <string name="import_failed_more">…і ще %1$d</string>
+    <string name="import_reason_open">не вдалося відкрити: файл переміщено, видалено або він недоступний</string>
+    <string name="import_reason_changed">файл змінювався під час читання — спробуйте ще раз</string>
+    <string name="import_reason_space">не вистачає місця в пам’яті телефона</string>
+    <string name="import_reason_verify">перевірка не пройшла — спробуйте ще раз</string>
+    <string name="import_reason_other">помилка читання (код %1$s)</string>
+    <string name="picker_today">Сьогодні</string>
+    <string name="picker_yesterday">Учора</string>
 </resources>

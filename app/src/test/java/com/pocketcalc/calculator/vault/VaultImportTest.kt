@@ -118,8 +118,10 @@ class VaultImportTest {
         try {
             repo.importFile(s, ByteArrayInputStream(data), ImportMeta("p.jpg", "image/jpeg", size = 1), null)
             fail("несовпадение размера должно отменить добавление")
-        } catch (e: IllegalStateException) {
-            // ожидаемо
+        } catch (e: SizeMismatchException) {
+            // Причина видна: сколько прочитано и сколько ожидалось.
+            assertEquals(data.size.toLong(), e.read)
+            assertEquals(1L, e.expected)
         }
         assertEquals(0, repo.loadIndex(s)!!.entries.size)
         assertEquals(0, blobCount(dir))
