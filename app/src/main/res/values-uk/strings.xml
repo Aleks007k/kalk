@@ -100,7 +100,7 @@
     <string name="section_media">Фото й відео</string>
     <string name="section_files">Файли</string>
     <string name="files_empty_title">Файлів поки немає</string>
-    <string name="files_empty_text">Тут зберігаються документи й нотатки. Натисніть «+ Файли» або «+ Нотатка».</string>
+    <string name="files_empty_text">Тут зберігаються документи, аудіозаписи й нотатки. Натисніть «+ Файли» або «+ Нотатка».</string>
 
     <!-- Настройки (этап 6) -->
     <string name="settings_title">Налаштування</string>
@@ -160,4 +160,13 @@
     <string name="import_reason_other">помилка читання (код %1$s)</string>
     <string name="picker_today">Сьогодні</string>
     <string name="picker_yesterday">Учора</string>
+
+    <!-- Аудио и возврат папки -->
+    <string name="viewer_audio_failed">Не вдалося відтворити запис. Його можна відновити через ⋮.</string>
+    <string name="restore_progress_many">Повертаю %1$d з %2$d…</string>
+    <string name="folder_restore">Відновити всі файли</string>
+    <string name="folder_restore_title">Відновити папку «%1$s»?</string>
+    <string name="folder_restore_text">Усі файли з неї (%1$d) повернуться до Галереї — кожен туди, звідки був доданий, — і зникнуть зі сховища. Порожня папка видалиться.</string>
+    <string name="folder_restored">Повернуто до Галереї: %1$d. Папку видалено.</string>
+    <string name="folder_restored_partly">Повернуто до Галереї: %1$d з %2$d. Решта файлів залишилася в папці.</string>
 </resources>

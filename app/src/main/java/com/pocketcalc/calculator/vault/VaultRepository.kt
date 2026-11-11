@@ -271,7 +271,7 @@ class VaultRepository(
                     id = AtomicFiles.randomHex(16),
                     name = meta.name,
                     mime = meta.mime,
-                    kind = EntryKind.fromMime(meta.mime),
+                    kind = EntryKind.of(meta.mime, meta.name),
                     size = stored.size,
                     addedAt = System.currentTimeMillis(),
                     blobId = stored.id,

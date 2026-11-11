@@ -191,6 +191,13 @@ fun ViewerScreen(
                         session = session,
                         onEdit = { text -> onEditNote(entry, text) },
                     )
+                    EntryKind.AUDIO -> AudioPage(
+                        entry = entry,
+                        repository = repository,
+                        session = session,
+                        active = pagerState.settledPage == page,
+                        onTap = toggleChrome,
+                    )
                     EntryKind.OTHER -> FilePage(entry, onTap = toggleChrome)
                 }
             }

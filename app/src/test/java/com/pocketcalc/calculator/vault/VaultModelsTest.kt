@@ -255,6 +255,31 @@ class VaultModelsTest {
         assertEquals(EntryKind.OTHER, EntryKind.fromMime("application/zip"))
     }
 
+    @Test fun audioIsRecognisedByMimeOrExtension() {
+        assertEquals(EntryKind.AUDIO, EntryKind.fromMime("audio/aac"))
+        assertEquals(EntryKind.AUDIO, EntryKind.of("audio/mpeg", "song.mp3"))
+        // Источник не сообщил тип — узнаём по расширению.
+        assertEquals(EntryKind.AUDIO, EntryKind.of("application/octet-stream", "Запись 01.AAC"))
+        assertEquals(EntryKind.AUDIO, EntryKind.of("application/ogg", "voice.opus"))
+        assertEquals(EntryKind.OTHER, EntryKind.of("application/octet-stream", "archive.zip"))
+        assertEquals(EntryKind.VIDEO, EntryKind.of("video/mp4", "clip.mp4"))
+        // Номер нового типа — в конце списка: старые оглавления читаются по-прежнему.
+        assertEquals(EntryKind.OTHER, EntryKind.fromId(4))
+        assertEquals(EntryKind.AUDIO, EntryKind.fromId(5))
+    }
+
+    @Test fun oldAudioEntriesBecomePlayable() {
+        // До версии 0.11.0 звук сохранялся как «прочий файл».
+        val old = VaultEntry(
+            id = "a1", name = "запись.aac", mime = "application/octet-stream",
+            kind = EntryKind.OTHER, size = 10, addedAt = 1, blobId = "b1", thumbId = null,
+        )
+        val zip = old.copy(id = "z1", name = "архив.zip")
+        val back = roundTrip(VaultIndex(listOf(old, zip)))
+        assertEquals(EntryKind.AUDIO, back.find("a1")!!.kind)
+        assertEquals(EntryKind.OTHER, back.find("z1")!!.kind)
+    }
+
     @Test fun sizesAndTimestampsPreserved() {
         val e = entry(7).copy(size = 9_999_999_999L, addedAt = 1_700_000_000_000L)
         val back = roundTrip(VaultIndex.empty().add(e)).find("id7")!!

@@ -50,8 +50,10 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -240,6 +242,125 @@ private fun ActiveVideo(
                 showPause = wantsToPlay && !ended,
                 ended = ended,
                 onInteraction = { lastInteraction = SystemClock.uptimeMillis() },
+            )
+        }
+    }
+}
+
+/**
+ * Аудиозапись в просмотре (AAC, MP3, M4A, OGG и др.): нота и название,
+ * внизу — те же кнопки, что у видео. Играет тот же плеер с расшифровкой
+ * на лету. Плеер создаётся, только когда листание остановилось на записи.
+ */
+@Composable
+internal fun AudioPage(
+    entry: VaultEntry,
+    repository: VaultRepository,
+    session: VaultSession,
+    active: Boolean,
+    onTap: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) { detectTapGestures(onTap = { onTap() }) },
+    ) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x22FFFFFF)),
+                contentAlignment = Alignment.Center,
+            ) {
+                MusicNoteIcon(modifier = Modifier.size(60.dp))
+            }
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = entry.name,
+                color = Color.White,
+                fontSize = 18.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (active) {
+            ActiveAudio(entry, repository, session, Modifier.align(Alignment.BottomCenter))
+        }
+    }
+}
+
+/**
+ * Плеер записи. Пока она играет, экран не гаснет: если он погаснет или
+ * пользователь уйдёт из приложения, тайник закроется и звук остановится —
+ * так задумано ради секретности.
+ */
+@Composable
+private fun ActiveAudio(
+    entry: VaultEntry,
+    repository: VaultRepository,
+    session: VaultSession,
+    modifier: Modifier,
+) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    val exoPlayer = remember(entry.id) { VaultPlayer.create(context, repository, session, entry) }
+    var playing by remember(entry.id) { mutableStateOf(false) }
+    var wantsToPlay by remember(entry.id) { mutableStateOf(true) }
+    var ended by remember(entry.id) { mutableStateOf(false) }
+    var failed by remember(entry.id) { mutableStateOf(false) }
+
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                playing = isPlaying
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                wantsToPlay = playWhenReady
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                ended = playbackState == Player.STATE_ENDED
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                failed = true
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose {
+            exoPlayer.removeListener(listener)
+            exoPlayer.release()
+        }
+    }
+
+    DisposableEffect(playing) {
+        view.keepScreenOn = playing
+        onDispose { view.keepScreenOn = false }
+    }
+
+    if (failed) {
+        Text(
+            text = stringResource(R.string.viewer_audio_failed),
+            color = Color.White,
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+            modifier = modifier.padding(32.dp),
+        )
+    } else {
+        Box(modifier = modifier) {
+            VideoControls(
+                player = exoPlayer,
+                showPause = wantsToPlay && !ended,
+                ended = ended,
+                onInteraction = {},
             )
         }
     }

@@ -116,6 +116,29 @@ internal fun FolderIcon(modifier: Modifier = Modifier, color: Color = Color.Whit
     }
 }
 
+/** Нота — значок аудиозаписи. */
+@Composable
+internal fun MusicNoteIcon(modifier: Modifier = Modifier, color: Color = Color.White) {
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val stroke = w * 0.08f
+        // Две головки нот, штили и перекладина между ними.
+        drawOval(color, Offset(w * 0.12f, h * 0.68f), Size(w * 0.28f, h * 0.2f))
+        drawOval(color, Offset(w * 0.56f, h * 0.58f), Size(w * 0.28f, h * 0.2f))
+        drawLine(color, Offset(w * 0.36f, h * 0.76f), Offset(w * 0.36f, h * 0.22f), strokeWidth = stroke)
+        drawLine(color, Offset(w * 0.80f, h * 0.66f), Offset(w * 0.80f, h * 0.12f), strokeWidth = stroke)
+        val beam = Path().apply {
+            moveTo(w * 0.36f - stroke / 2, h * 0.20f)
+            lineTo(w * 0.80f + stroke / 2, h * 0.10f)
+            lineTo(w * 0.80f + stroke / 2, h * 0.22f)
+            lineTo(w * 0.36f - stroke / 2, h * 0.32f)
+            close()
+        }
+        drawPath(beam, color)
+    }
+}
+
 /** «Играть» (треугольник) или «пауза» (две полосы). */
 @Composable
 internal fun PlayPauseIcon(showPause: Boolean, modifier: Modifier = Modifier, color: Color = Color.White) {

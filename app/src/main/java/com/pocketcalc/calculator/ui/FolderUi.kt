@@ -308,13 +308,17 @@ private fun MoveTarget(text: String, palette: CalcPalette, showIcon: Boolean, on
     }
 }
 
-/** Долгое нажатие на папку: «Переименовать» или «Удалить папку». */
+/**
+ * Долгое нажатие на папку: «Восстановить все файлы» (если [onRestore] задан),
+ * «Переименовать» или «Удалить папку».
+ */
 @Composable
 internal fun FolderActionsDialog(
     folder: VaultFolder,
     palette: CalcPalette,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    onRestore: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -322,6 +326,9 @@ internal fun FolderActionsDialog(
         title = { Text(text = folder.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
+                if (onRestore != null) {
+                    DialogAction(text = stringResource(R.string.folder_restore), color = palette.opBg, onClick = onRestore)
+                }
                 DialogAction(text = stringResource(R.string.folder_rename), color = palette.opBg, onClick = onRename)
                 DialogAction(text = stringResource(R.string.folder_delete), color = palette.error, onClick = onDelete)
             }

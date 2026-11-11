@@ -116,7 +116,8 @@ private sealed interface VaultFlow {
     data object Browse : VaultFlow
     data object Picking : VaultFlow
     data class Importing(val done: Int, val total: Int) : VaultFlow
-    data object Restoring : VaultFlow
+    /** Возврат файлов в Галерею: [done] из [total] уже готово. */
+    data class Restoring(val done: Int, val total: Int) : VaultFlow
 }
 
 /**
@@ -176,6 +177,7 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
     var folderActionsFor by remember { mutableStateOf<VaultFolder?>(null) }
     var renamingFolder by remember { mutableStateOf<VaultFolder?>(null) }
     var deletingFolder by remember { mutableStateOf<VaultFolder?>(null) }
+    var restoringFolder by remember { mutableStateOf<VaultFolder?>(null) }
     var creatingFolder by remember { mutableStateOf(false) }
     /** Файл, который переедет в папку, создаваемую из окна «Переместить». */
     var moveAfterCreate by remember { mutableStateOf<VaultEntry?>(null) }
@@ -404,7 +406,7 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
 
     // --- Возврат файла из тайника в память телефона ---
     fun restore(entry: VaultEntry) {
-        flow = VaultFlow.Restoring
+        flow = VaultFlow.Restoring(0, 1)
         view.keepScreenOn = true
         scope.launch {
             val message = try {
@@ -501,6 +503,60 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
             }
             if (!ok) Toast.makeText(context, msgFailed, Toast.LENGTH_SHORT).show()
             reload++
+        }
+    }
+
+    /**
+     * Возвращает все файлы папки в Галерею — каждый туда, откуда он был
+     * добавлен. Когда папка опустела, она удаляется. Файл, который вернуть
+     * не удалось, остаётся в папке.
+     */
+    fun restoreFolder(folder: VaultFolder) {
+        val files = entries.orEmpty().filter { it.folderId == folder.id }
+        flow = VaultFlow.Restoring(0, files.size)
+        view.keepScreenOn = true
+        scope.launch {
+            var restored = 0
+            var removed = 0
+            try {
+                for ((i, entry) in files.withIndex()) {
+                    if (!session.isOpen) break
+                    flow = VaultFlow.Restoring(i, files.size)
+                    try {
+                        val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            Restorer.restore(context, app.repository, session, entry)
+                        } else {
+                            throw UnsupportedOperationException("нужен Android 10 или новее")
+                        }
+                        restored++
+                        if (result.removedFromVault) removed++
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // файл остаётся в папке
+                    }
+                    thumbCache.remove(entry.id)
+                }
+                if (removed == files.size) {
+                    withContext(Dispatchers.IO) {
+                        try {
+                            app.repository.deleteFolder(session, folder.id)
+                        } catch (e: Exception) {
+                            false
+                        }
+                    }
+                }
+            } finally {
+                view.keepScreenOn = false
+                flow = VaultFlow.Browse
+                reload++
+            }
+            val message = if (removed == files.size) {
+                context.getString(R.string.folder_restored, restored)
+            } else {
+                context.getString(R.string.folder_restored_partly, restored, files.size)
+            }
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -840,6 +896,12 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                     Text(
                         text = if (current is VaultFlow.Importing) {
                             stringResource(R.string.import_progress, current.done, current.total)
+                        } else if (current is VaultFlow.Restoring && current.total > 1) {
+                            stringResource(
+                                R.string.restore_progress_many,
+                                (current.done + 1).coerceAtMost(current.total),
+                                current.total,
+                            )
                         } else {
                             stringResource(R.string.restore_progress)
                         },
@@ -1073,6 +1135,15 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                 folderActionsFor = null
                 deletingFolder = folderActing
             },
+            // Возврат в Галерею работает на Android 10 и новее; пустую папку возвращать нечего.
+            onRestore = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && (folderCounts[folderActing.id] ?: 0) > 0) {
+                {
+                    folderActionsFor = null
+                    restoringFolder = folderActing
+                }
+            } else {
+                null
+            },
             onDismiss = { folderActionsFor = null },
         )
     }
@@ -1093,6 +1164,30 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                 onDismiss = { renamingFolder = null },
             )
         }
+    }
+
+    val folderRestoring = restoringFolder
+    if (folderRestoring != null) {
+        AlertDialog(
+            onDismissRequest = { restoringFolder = null },
+            title = { Text(text = stringResource(R.string.folder_restore_title, folderRestoring.name)) },
+            text = {
+                Text(text = stringResource(R.string.folder_restore_text, folderCounts[folderRestoring.id] ?: 0))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    restoringFolder = null
+                    restoreFolder(folderRestoring)
+                }) {
+                    Text(text = stringResource(R.string.entry_restore), color = palette.opBg)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { restoringFolder = null }) {
+                    Text(text = stringResource(R.string.dialog_cancel))
+                }
+            },
+        )
     }
 
     val folderDeleting = deletingFolder
@@ -1379,6 +1474,7 @@ internal fun extensionLabel(entry: VaultEntry): String {
         EntryKind.VIDEO -> "VID"
         EntryKind.PDF -> "PDF"
         EntryKind.NOTE -> "TXT"
+        EntryKind.AUDIO -> "AUDIO"
         EntryKind.OTHER -> "FILE"
     }
 }

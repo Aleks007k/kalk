@@ -5,20 +5,41 @@ import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 
-/** Тип спрятанного файла — определяет, как его показывать. */
+/**
+ * Тип спрятанного файла — определяет, как его показывать.
+ * В оглавлении хранится номер типа, поэтому новые типы — только в конец.
+ */
 enum class EntryKind {
-    PHOTO, VIDEO, PDF, NOTE, OTHER;
+    PHOTO, VIDEO, PDF, NOTE, OTHER,
+
+    /** Звук: AAC, MP3, M4A, OGG/Opus, WAV, FLAC, AMR (с версии 0.11.0). */
+    AUDIO;
 
     companion object {
+        /** Расширения звуковых файлов — когда MIME ничего не говорит. */
+        private val AUDIO_EXTENSIONS = setOf("aac", "m4a", "mp3", "ogg", "oga", "opus", "wav", "flac", "amr", "3ga", "mka")
+
         fun fromId(id: Int): EntryKind = entries.getOrElse(id) { OTHER }
 
-        /** Тип по MIME: image/… → фото, video/… → видео, и т.д. */
+        /** Тип по MIME: image/… → фото, video/… → видео, audio/… → звук и т.д. */
         fun fromMime(mime: String): EntryKind = when {
             mime.startsWith("image/") -> PHOTO
             mime.startsWith("video/") -> VIDEO
+            mime.startsWith("audio/") -> AUDIO
             mime == "application/pdf" -> PDF
             mime == "text/plain" -> NOTE
             else -> OTHER
+        }
+
+        /**
+         * Тип по MIME, а если он ничего не говорит (например,
+         * «application/octet-stream»), — по расширению: «запись.aac» → звук.
+         */
+        fun of(mime: String, name: String): EntryKind {
+            val byMime = fromMime(mime)
+            if (byMime != OTHER) return byMime
+            val ext = name.substringAfterLast('.', "").lowercase()
+            return if (ext in AUDIO_EXTENSIONS) AUDIO else OTHER
         }
     }
 }
@@ -197,7 +218,10 @@ data class VaultIndex(
                     val id = input.readUTF()
                     val name = input.readUTF()
                     val mime = input.readUTF()
-                    val kind = EntryKind.fromId(input.readInt())
+                    // Звук, добавленный до версии 0.11.0, был «прочим файлом» — теперь он слушается.
+                    val kind = EntryKind.fromId(input.readInt()).let {
+                        if (it == EntryKind.OTHER && EntryKind.of(mime, name) == EntryKind.AUDIO) EntryKind.AUDIO else it
+                    }
                     val size = input.readLong()
                     val addedAt = input.readLong()
                     val blobId = input.readUTF()
