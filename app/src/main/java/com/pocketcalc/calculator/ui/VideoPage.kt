@@ -50,7 +50,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,9 +78,13 @@ private const val AUTO_HIDE_MS = 3_000L
 private const val POSITION_TICK_MS = 250L
 
 /**
- * Видео в просмотре. Плеер создаётся только для страницы, на которой
- * остановилось листание, и освобождается, когда её пролистали или тайник
- * закрылся. Пока страница не активна — миниатюра со значком «играть».
+ * Видео или аудиозапись в просмотре. Плеер создаётся только для страницы,
+ * на которой остановилось листание, и освобождается, когда её пролистали
+ * или тайник закрылся. Пока страница не активна — миниатюра со значком
+ * «играть» (у записи — нота и название).
+ *
+ * [audio] — файл считается звуком (например, «.aac»). Если в нём всё же
+ * окажется картинка, она показывается как у обычного видео.
  */
 @Composable
 internal fun VideoPage(
@@ -93,9 +96,10 @@ internal fun VideoPage(
     chromeVisible: Boolean,
     onTap: () -> Unit,
     onChromeVisible: (Boolean) -> Unit,
+    audio: Boolean = false,
 ) {
     if (active) {
-        ActiveVideo(entry, repository, session, placeholder, chromeVisible, onTap, onChromeVisible)
+        ActiveVideo(entry, repository, session, placeholder, chromeVisible, onTap, onChromeVisible, audio)
     } else {
         Box(
             modifier = Modifier
@@ -103,19 +107,51 @@ internal fun VideoPage(
                 .pointerInput(Unit) { detectTapGestures(onTap = { onTap() }) },
             contentAlignment = Alignment.Center,
         ) {
-            if (placeholder != null) {
-                Image(placeholder, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-            }
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(Color(0x99000000)),
-                contentAlignment = Alignment.Center,
-            ) {
-                PlayPauseIcon(showPause = false, modifier = Modifier.size(34.dp))
+            if (audio) {
+                AudioCover(entry.name)
+            } else {
+                if (placeholder != null) {
+                    Image(placeholder, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                }
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x99000000)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PlayPauseIcon(showPause = false, modifier = Modifier.size(34.dp))
+                }
             }
         }
+    }
+}
+
+/** Обложка записи без картинки: нота и название файла. */
+@Composable
+private fun AudioCover(name: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .clip(CircleShape)
+                .background(Color(0x22FFFFFF)),
+            contentAlignment = Alignment.Center,
+        ) {
+            MusicNoteIcon(modifier = Modifier.size(60.dp))
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = name,
+            color = Color.White,
+            fontSize = 18.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -123,6 +159,8 @@ internal fun VideoPage(
  * Кадры выводятся в TextureView: его, в отличие от SurfaceView, можно
  * увеличивать пальцами так же, как фото. Окно тайника защищено от
  * скриншотов целиком, поэтому и кадры видео на них не попадают.
+ * Пока что-то играет, экран не гаснет (если погаснет — тайник закроется
+ * и звук остановится, так задумано ради секретности).
  */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
@@ -134,6 +172,7 @@ private fun ActiveVideo(
     chromeVisible: Boolean,
     onTap: () -> Unit,
     onChromeVisible: (Boolean) -> Unit,
+    audio: Boolean,
 ) {
     val context = LocalContext.current
     val currentOnChromeVisible by rememberUpdatedState(onChromeVisible)
@@ -145,6 +184,8 @@ private fun ActiveVideo(
     var firstFrame by remember(entry.id) { mutableStateOf(false) }
     var failed by remember(entry.id) { mutableStateOf(false) }
     var lastInteraction by remember(entry.id) { mutableLongStateOf(0L) }
+    // У записи без картинки показываем ноту, а кнопки не прячем.
+    val showsPicture = !audio || videoSize.isSpecified
 
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
@@ -184,8 +225,8 @@ private fun ActiveVideo(
     }
 
     // Пока видео играет, панели прячутся сами через 3 секунды без касаний.
-    LaunchedEffect(chromeVisible, playing, lastInteraction) {
-        if (chromeVisible && playing) {
+    LaunchedEffect(chromeVisible, playing, lastInteraction, showsPicture) {
+        if (chromeVisible && playing && showsPicture) {
             delay(AUTO_HIDE_MS)
             currentOnChromeVisible(false)
         }
@@ -217,11 +258,21 @@ private fun ActiveVideo(
             if (!firstFrame && placeholder != null) {
                 Image(placeholder, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             }
+            if (!showsPicture) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AudioCover(entry.name)
+                }
+            }
         }
 
         if (failed) {
             Text(
-                text = stringResource(R.string.viewer_video_failed),
+                text = stringResource(if (audio) R.string.viewer_audio_failed else R.string.viewer_video_failed),
                 color = Color.White,
                 fontSize = 16.sp,
                 textAlign = TextAlign.Center,
@@ -232,7 +283,7 @@ private fun ActiveVideo(
         }
 
         AnimatedVisibility(
-            visible = chromeVisible && !failed,
+            visible = (chromeVisible || !showsPicture) && !failed,
             modifier = Modifier.align(Alignment.BottomCenter),
             enter = fadeIn(),
             exit = fadeOut(),
@@ -242,125 +293,6 @@ private fun ActiveVideo(
                 showPause = wantsToPlay && !ended,
                 ended = ended,
                 onInteraction = { lastInteraction = SystemClock.uptimeMillis() },
-            )
-        }
-    }
-}
-
-/**
- * Аудиозапись в просмотре (AAC, MP3, M4A, OGG и др.): нота и название,
- * внизу — те же кнопки, что у видео. Играет тот же плеер с расшифровкой
- * на лету. Плеер создаётся, только когда листание остановилось на записи.
- */
-@Composable
-internal fun AudioPage(
-    entry: VaultEntry,
-    repository: VaultRepository,
-    session: VaultSession,
-    active: Boolean,
-    onTap: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .pointerInput(Unit) { detectTapGestures(onTap = { onTap() }) },
-    ) {
-        Column(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(120.dp)
-                    .clip(CircleShape)
-                    .background(Color(0x22FFFFFF)),
-                contentAlignment = Alignment.Center,
-            ) {
-                MusicNoteIcon(modifier = Modifier.size(60.dp))
-            }
-            Spacer(Modifier.height(20.dp))
-            Text(
-                text = entry.name,
-                color = Color.White,
-                fontSize = 18.sp,
-                textAlign = TextAlign.Center,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (active) {
-            ActiveAudio(entry, repository, session, Modifier.align(Alignment.BottomCenter))
-        }
-    }
-}
-
-/**
- * Плеер записи. Пока она играет, экран не гаснет: если он погаснет или
- * пользователь уйдёт из приложения, тайник закроется и звук остановится —
- * так задумано ради секретности.
- */
-@Composable
-private fun ActiveAudio(
-    entry: VaultEntry,
-    repository: VaultRepository,
-    session: VaultSession,
-    modifier: Modifier,
-) {
-    val context = LocalContext.current
-    val view = LocalView.current
-    val exoPlayer = remember(entry.id) { VaultPlayer.create(context, repository, session, entry) }
-    var playing by remember(entry.id) { mutableStateOf(false) }
-    var wantsToPlay by remember(entry.id) { mutableStateOf(true) }
-    var ended by remember(entry.id) { mutableStateOf(false) }
-    var failed by remember(entry.id) { mutableStateOf(false) }
-
-    DisposableEffect(exoPlayer) {
-        val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                playing = isPlaying
-            }
-
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                wantsToPlay = playWhenReady
-            }
-
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                ended = playbackState == Player.STATE_ENDED
-            }
-
-            override fun onPlayerError(error: PlaybackException) {
-                failed = true
-            }
-        }
-        exoPlayer.addListener(listener)
-        onDispose {
-            exoPlayer.removeListener(listener)
-            exoPlayer.release()
-        }
-    }
-
-    DisposableEffect(playing) {
-        view.keepScreenOn = playing
-        onDispose { view.keepScreenOn = false }
-    }
-
-    if (failed) {
-        Text(
-            text = stringResource(R.string.viewer_audio_failed),
-            color = Color.White,
-            fontSize = 16.sp,
-            textAlign = TextAlign.Center,
-            modifier = modifier.padding(32.dp),
-        )
-    } else {
-        Box(modifier = modifier) {
-            VideoControls(
-                player = exoPlayer,
-                showPause = wantsToPlay && !ended,
-                ended = ended,
-                onInteraction = {},
             )
         }
     }

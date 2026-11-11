@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.system.ErrnoException
 import android.system.OsConstants
+import com.pocketcalc.calculator.vault.EntryKind
 import com.pocketcalc.calculator.vault.ImportMeta
 import com.pocketcalc.calculator.vault.ImportResult
 import com.pocketcalc.calculator.vault.SizeMismatchException
@@ -104,11 +105,21 @@ object Importer {
         return importAll(session, uris.size, { docs[it]?.name ?: uris[it].lastPathSegment.orEmpty() }, onProgress) { index ->
             val doc = MediaGallery.describeDocument(context, uris[index])
             docs[index] = doc
+            // У видео и «звука» смотрим, есть ли картинка: видео, сохранённое под
+            // именем «.aac», добавляем как видео (с миниатюрой и длительностью).
+            val kind = EntryKind.of(doc.mime, doc.name)
+            val video = if (kind == EntryKind.AUDIO || kind == EntryKind.VIDEO) {
+                MediaGallery.probeVideo(context, doc.uri, THUMB_SIZE_PX)
+            } else {
+                null
+            }
+            val mime = if (video != null && kind == EntryKind.AUDIO) video.mime else doc.mime
             val result = MediaGallery.openDocument(context, doc.uri).use { file ->
                 val size = file.size ?: doc.size.takeIf { it > 0 }
                 ensureSpace(context, size)
-                val thumb = MediaGallery.documentThumbnail(context, doc, THUMB_SIZE_PX)?.let(MediaGallery::toJpeg)
-                val meta = ImportMeta(name = doc.name, mime = doc.mime, size = size)
+                val thumb = (video?.frame ?: MediaGallery.documentThumbnail(context, doc, THUMB_SIZE_PX))
+                    ?.let(MediaGallery::toJpeg)
+                val meta = ImportMeta(name = doc.name, mime = mime, size = size, durationMs = video?.durationMs ?: 0L)
                 repository.importFile(session, file.input, meta, thumb)
             }
             result to doc.uri

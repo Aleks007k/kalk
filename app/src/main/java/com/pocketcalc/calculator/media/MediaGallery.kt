@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.provider.BaseColumns
@@ -41,6 +42,9 @@ data class MediaItem(
 class OpenedFile(val input: InputStream, val size: Long?) : Closeable {
     override fun close() = input.close()
 }
+
+/** Что узнали о файле с картинкой: настоящий тип, кадр для миниатюры, длительность. */
+class VideoProbe(val mime: String, val frame: Bitmap?, val durationMs: Long)
 
 /** Документ, выбранный в системном окне выбора файлов. */
 data class DocumentInfo(
@@ -217,6 +221,55 @@ object MediaGallery {
         } catch (e: Exception) {
             null
         }
+    }
+
+    /**
+     * Есть ли в файле картинка (дорожка видео). Бывает, что видео сохранено
+     * под «звуковым» именем, например «.aac», и Android по имени считает его
+     * звуком; такой файл добавляем как видео. Заодно — кадр для миниатюры и
+     * длительность. null — картинки нет или узнать не удалось.
+     */
+    fun probeVideo(context: Context, uri: Uri, sizePx: Int): VideoProbe? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, uri)
+            if (retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) != "yes") return null
+            val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
+                ?.takeIf { it.startsWith("video/") } ?: "video/mp4"
+            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull() ?: 0L
+            val frame = try {
+                scaledFrame(retriever, sizePx)
+            } catch (e: Exception) {
+                null
+            }
+            VideoProbe(mime, frame, duration)
+        } catch (e: Exception) {
+            null
+        } finally {
+            try {
+                retriever.release()
+            } catch (e: Exception) {
+                // уже не важно
+            }
+        }
+    }
+
+    /** Кадр около первой секунды, не крупнее [sizePx] по большей стороне. */
+    private fun scaledFrame(retriever: MediaMetadataRetriever, sizePx: Int): Bitmap? {
+        val timeUs = 1_000_000L
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            return retriever.getScaledFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, sizePx, sizePx)
+        }
+        val full = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: return null
+        val scale = sizePx.toFloat() / maxOf(full.width, full.height)
+        if (scale >= 1f) return full
+        return Bitmap.createScaledBitmap(
+            full,
+            (full.width * scale).toInt().coerceAtLeast(1),
+            (full.height * scale).toInt().coerceAtLeast(1),
+            true,
+        )
     }
 
     /** Первая страница PDF на белом фоне (защищённые паролем PDF — null). */
