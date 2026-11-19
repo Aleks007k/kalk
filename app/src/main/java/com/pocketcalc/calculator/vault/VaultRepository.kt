@@ -474,6 +474,44 @@ class VaultRepository(
         }
 
     /**
+     * Удаляет сразу несколько файлов: одна запись оглавления, потом —
+     * зашифрованные файлы. Возвращает, сколько записей удалено.
+     */
+    fun deleteEntries(session: VaultSession, entryIds: Collection<String>): Int = withKeyCopy(session) { key ->
+        val ids = entryIds.toSet()
+        synchronized(indexLock) {
+            val index = storage.loadIndex(key) ?: error("оглавление повреждено")
+            val gone = index.entries.filter { it.id in ids }
+            if (gone.isEmpty()) return@withKeyCopy 0
+            storage.saveIndex(key, index.copy(entries = index.entries.filterNot { it.id in ids }))
+            for (entry in gone) {
+                storage.deleteBlob(entry.blobId)
+                entry.thumbId?.let { storage.deleteBlob(it) }
+            }
+            gone.size
+        }
+    }
+
+    /**
+     * Переносит сразу несколько файлов в папку ([folderId] = null — в общую
+     * сетку). Возвращает, сколько перенесено; несуществующая папка — 0.
+     */
+    fun moveEntries(session: VaultSession, entryIds: Collection<String>, folderId: String?): Int {
+        val ids = entryIds.toSet()
+        var moved = 0
+        updateIndex(session) { index ->
+            if (folderId != null && index.findFolder(folderId) == null) return@updateIndex null
+            moved = index.entries.count { it.id in ids }
+            if (moved == 0) {
+                null
+            } else {
+                index.copy(entries = index.entries.map { if (it.id in ids) it.copy(folderId = folderId) else it })
+            }
+        }
+        return moved
+    }
+
+    /**
      * Выполняет [block] с копией мастер-ключа и затирает копию после.
      * Если тайник закроют посреди операции, копия останется целой.
      */

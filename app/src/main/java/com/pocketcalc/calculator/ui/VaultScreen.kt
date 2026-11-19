@@ -4,6 +4,7 @@ import android.app.Activity
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.text.format.Formatter
 import android.util.LruCache
@@ -15,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -41,6 +44,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -88,11 +92,13 @@ import com.pocketcalc.calculator.vault.TextCodec
 import com.pocketcalc.calculator.vault.VaultEntry
 import com.pocketcalc.calculator.vault.VaultFolder
 import com.pocketcalc.calculator.vault.VaultSession
+import com.pocketcalc.calculator.vault.ZipExport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
+import java.io.IOException
 import java.text.Collator
 import java.text.DateFormat
 import java.text.SimpleDateFormat
@@ -118,6 +124,8 @@ private sealed interface VaultFlow {
     data class Importing(val done: Int, val total: Int) : VaultFlow
     /** Возврат файлов в Галерею: [done] из [total] уже готово. */
     data class Restoring(val done: Int, val total: Int) : VaultFlow
+    /** Сохранение выбранных файлов в архив: [done] из [total]. */
+    data class Exporting(val done: Int, val total: Int) : VaultFlow
 }
 
 /**
@@ -180,8 +188,16 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
     var restoringFolder by remember { mutableStateOf<VaultFolder?>(null) }
     var creatingFolder by remember { mutableStateOf(false) }
     /** Файл, который переедет в папку, создаваемую из окна «Переместить». */
-    var moveAfterCreate by remember { mutableStateOf<VaultEntry?>(null) }
-    var movingEntry by remember { mutableStateOf<VaultEntry?>(null) }
+    var moveAfterCreate by remember { mutableStateOf<List<VaultEntry>?>(null) }
+    /** Файлы, для которых открыто окно «Переместить в…» (один или выбранные). */
+    var moveTargets by remember { mutableStateOf<List<VaultEntry>?>(null) }
+    /** Отмеченные файлы; пусто — обычный режим, иначе — режим выделения. */
+    var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var askBulkDelete by remember { mutableStateOf(false) }
+    var askBulkRestore by remember { mutableStateOf(false) }
+    var askArchive by remember { mutableStateOf(false) }
+    /** Файлы, которые ждут, пока пользователь выберет, куда сохранить архив. */
+    var pendingArchive by remember { mutableStateOf<List<VaultEntry>?>(null) }
     /** Новая папка, к которой надо прокрутить сетку, когда она появится. */
     var scrollToFolderId by remember { mutableStateOf<String?>(null) }
     // У каждой открытой папки своя прокрутка, у общей сетки — своя.
@@ -212,6 +228,21 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
     val sectionEntries = if (section == Section.MEDIA) gridEntries else fileEntries
     val activeGridState = if (openFolder != null) folderGridState else gridState
 
+    val selecting = selectedIds.isNotEmpty()
+    val selectedEntries = remember(sectionEntries, selectedIds) {
+        sectionEntries.orEmpty().filter { it.id in selectedIds }
+    }
+    fun toggleSelected(entry: VaultEntry) {
+        selectedIds = if (entry.id in selectedIds) selectedIds - entry.id else selectedIds + entry.id
+    }
+    // Другой раздел или папка — выделение снимается.
+    LaunchedEffect(section, openFolderId) { selectedIds = emptySet() }
+    // Файлы удалили или вернули — убираем их из выделения.
+    LaunchedEffect(entries) {
+        val present = entries.orEmpty().mapTo(HashSet()) { it.id }
+        if (!present.containsAll(selectedIds)) selectedIds = selectedIds.intersect(present)
+    }
+
     fun openViewer(entry: VaultEntry) {
         val visible = if (section == Section.MEDIA) {
             activeGridState.layoutInfo.visibleItemsInfo.map { it.index }
@@ -237,9 +268,11 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
         when (flow) {
             is VaultFlow.Picking -> flow = VaultFlow.Browse
             // во время шифрования или возврата «Назад» не прерывает работу
-            is VaultFlow.Importing, is VaultFlow.Restoring -> Unit
+            is VaultFlow.Importing, is VaultFlow.Restoring, is VaultFlow.Exporting -> Unit
             // из «Файлов» или из папки — сначала к фото, потом уже закрыть тайник
             is VaultFlow.Browse -> when {
+                // сначала снимаем выделение
+                selectedIds.isNotEmpty() -> selectedIds = emptySet()
                 section == Section.FILES -> section = Section.MEDIA
                 openFolderId != null -> openFolderId = null
                 else -> onLock()
@@ -437,15 +470,16 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
     // --- Папки ---
     val msgFailed = stringResource(R.string.action_failed)
 
-    fun moveEntry(entry: VaultEntry, target: VaultFolder?) {
+    fun moveEntries(files: List<VaultEntry>, target: VaultFolder?) {
         scope.launch {
             val ok = withContext(Dispatchers.IO) {
                 try {
-                    app.repository.moveToFolder(session, entry.id, target?.id)
+                    app.repository.moveEntries(session, files.map { it.id }, target?.id) > 0
                 } catch (e: Exception) {
                     false
                 }
             }
+            if (ok) selectedIds = emptySet()
             val where = target?.name ?: context.getString(R.string.section_media)
             Toast.makeText(
                 context,
@@ -456,8 +490,8 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
         }
     }
 
-    /** Новая папка; [thenMove] — файл, который сразу переезжает в неё. */
-    fun createFolder(name: String, thenMove: VaultEntry?) {
+    /** Новая папка; [thenMove] — файлы, которые сразу переезжают в неё. */
+    fun createFolder(name: String, thenMove: List<VaultEntry>?) {
         scope.launch {
             val folder = withContext(Dispatchers.IO) {
                 try {
@@ -468,7 +502,7 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
             }
             when {
                 folder == null -> Toast.makeText(context, msgFailed, Toast.LENGTH_SHORT).show()
-                thenMove != null -> moveEntry(thenMove, folder)
+                thenMove != null -> moveEntries(thenMove, folder)
                 else -> {
                     if (openFolderId == null) scrollToFolderId = folder.id
                     reload++
@@ -507,12 +541,11 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
     }
 
     /**
-     * Возвращает все файлы папки в Галерею — каждый туда, откуда он был
-     * добавлен. Когда папка опустела, она удаляется. Файл, который вернуть
-     * не удалось, остаётся в папке.
+     * Возвращает файлы в Галерею — каждый туда, откуда он был добавлен. Если
+     * задана [folder] и она опустела, папка удаляется. Файл, который вернуть
+     * не удалось, остаётся в тайнике.
      */
-    fun restoreFolder(folder: VaultFolder) {
-        val files = entries.orEmpty().filter { it.folderId == folder.id }
+    fun restoreMany(files: List<VaultEntry>, folder: VaultFolder?) {
         flow = VaultFlow.Restoring(0, files.size)
         view.keepScreenOn = true
         scope.launch {
@@ -537,7 +570,7 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                     }
                     thumbCache.remove(entry.id)
                 }
-                if (removed == files.size) {
+                if (folder != null && removed == files.size) {
                     withContext(Dispatchers.IO) {
                         try {
                             app.repository.deleteFolder(session, folder.id)
@@ -551,12 +584,107 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                 flow = VaultFlow.Browse
                 reload++
             }
-            val message = if (removed == files.size) {
-                context.getString(R.string.folder_restored, restored)
-            } else {
-                context.getString(R.string.folder_restored_partly, restored, files.size)
+            val message = when {
+                folder != null && removed == files.size -> context.getString(R.string.folder_restored, restored)
+                folder != null -> context.getString(R.string.folder_restored_partly, restored, files.size)
+                removed == files.size -> context.getString(R.string.bulk_restored, restored)
+                else -> context.getString(R.string.bulk_restored_partly, restored, files.size)
             }
+            selectedIds = emptySet()
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    fun restoreFolder(folder: VaultFolder) =
+        restoreMany(entries.orEmpty().filter { it.folderId == folder.id }, folder)
+
+    /** Удаляет выбранные файлы из тайника навсегда. */
+    fun deleteMany(files: List<VaultEntry>) {
+        scope.launch {
+            val deleted = withContext(Dispatchers.IO) {
+                try {
+                    app.repository.deleteEntries(session, files.map { it.id })
+                } catch (e: Exception) {
+                    -1
+                }
+            }
+            files.forEach { thumbCache.remove(it.id) }
+            selectedIds = emptySet()
+            reload++
+            Toast.makeText(
+                context,
+                if (deleted >= 0) context.getString(R.string.bulk_deleted, deleted) else msgFailed,
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
+    /**
+     * Сохраняет [files] одним ZIP-архивом в [uri] (место выбрал пользователь).
+     * Внутри архива файлы расшифрованы. При сбое недописанный архив удаляется.
+     */
+    fun exportArchive(uri: Uri, files: List<VaultEntry>) {
+        val folderList = folders
+        flow = VaultFlow.Exporting(0, files.size)
+        view.keepScreenOn = true
+        scope.launch {
+            var ok = false
+            try {
+                ok = withContext(Dispatchers.IO) {
+                    try {
+                        val out = context.contentResolver.openOutputStream(uri, "w")
+                            ?: throw IOException("не удалось открыть файл для записи")
+                        out.use { stream ->
+                            ZipExport.write(app.repository, session, files, folderList, stream) { done ->
+                                flow = VaultFlow.Exporting(done, files.size)
+                            }
+                        }
+                        true
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // Недописанный архив не оставляем.
+                        try {
+                            DocumentsContract.deleteDocument(context.contentResolver, uri)
+                        } catch (cleanup: Exception) {
+                            // не вышло — пусть удалит пользователь
+                        }
+                        false
+                    }
+                }
+            } finally {
+                view.keepScreenOn = false
+                flow = VaultFlow.Browse
+            }
+            if (ok) selectedIds = emptySet()
+            Toast.makeText(
+                context,
+                if (ok) context.getString(R.string.archive_saved, files.size) else context.getString(R.string.archive_failed),
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
+    // --- Куда сохранить архив (системное окно) ---
+    val archiveLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri ->
+        AppController.endExternalActivity()
+        val files = pendingArchive
+        pendingArchive = null
+        if (uri != null && !files.isNullOrEmpty()) exportArchive(uri, files)
+    }
+    val archivePrefix = stringResource(R.string.archive_file_prefix)
+
+    fun chooseArchivePlace(files: List<VaultEntry>) {
+        pendingArchive = files
+        val name = archivePrefix + "_" + SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(Date()) + ".zip"
+        try {
+            AppController.beginExternalActivity()
+            archiveLauncher.launch(name)
+        } catch (e: Exception) {
+            AppController.endExternalActivity()
+            pendingArchive = null
         }
     }
 
@@ -656,7 +784,32 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val folderHere = if (section == Section.MEDIA) openFolder else null
-                    if (folderHere != null) {
+                    if (selecting) {
+                        // Режим выделения: крестик, «Выбрано: N», «Выбрать все».
+                        RoundIconButton(onClick = { selectedIds = emptySet() }, size = 44.dp) {
+                            CloseIcon(modifier = Modifier.size(22.dp), color = palette.displayPrimary)
+                        }
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.selection_count, selectedIds.size),
+                            color = palette.displayPrimary,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f),
+                        )
+                        val all = sectionEntries.orEmpty()
+                        val allSelected = all.isNotEmpty() && selectedEntries.size == all.size
+                        TextButton(onClick = {
+                            selectedIds = if (allSelected) emptySet() else all.mapTo(HashSet()) { it.id }
+                        }) {
+                            Text(
+                                text = stringResource(if (allSelected) R.string.select_none else R.string.select_all),
+                                color = palette.opBg,
+                                fontSize = 16.sp,
+                            )
+                        }
+                    } else if (folderHere != null) {
                         // В папке: стрелка назад и название вместо переключателя разделов.
                         RoundIconButton(onClick = { openFolderId = null }, size = 44.dp) {
                             BackArrowIcon(modifier = Modifier.size(26.dp), color = palette.displayPrimary)
@@ -679,12 +832,14 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                             modifier = Modifier.weight(1f),
                         )
                     }
-                    Spacer(Modifier.width(4.dp))
-                    RoundIconButton(onClick = { showSettings = true }, size = 44.dp) {
-                        GearIcon(modifier = Modifier.size(24.dp), color = palette.displaySecondary)
-                    }
-                    TextButton(onClick = onLock) {
-                        Text(text = stringResource(R.string.vault_lock), color = palette.opBg, fontSize = 17.sp)
+                    if (!selecting) {
+                        Spacer(Modifier.width(4.dp))
+                        RoundIconButton(onClick = { showSettings = true }, size = 44.dp) {
+                            GearIcon(modifier = Modifier.size(24.dp), color = palette.displaySecondary)
+                        }
+                        TextButton(onClick = onLock) {
+                            Text(text = stringResource(R.string.vault_lock), color = palette.opBg, fontSize = 17.sp)
+                        }
                     }
                 }
 
@@ -739,8 +894,9 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                                                 null
                                             }
                                         },
-                                        onClick = { openViewer(entry) },
-                                        onLongClick = { actionsFor = entry },
+                                        selected = entry.id in selectedIds,
+                                        onClick = { if (selecting) toggleSelected(entry) else openViewer(entry) },
+                                        onLongClick = { toggleSelected(entry) },
                                     )
                                 }
                                 if (showFolders) {
@@ -756,8 +912,9 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                                             folder = folder,
                                             count = folderCounts[folder.id] ?: 0,
                                             palette = palette,
-                                            onClick = { openFolderId = folder.id },
-                                            onLongClick = { folderActionsFor = folder },
+                                            // Пока выбираются файлы, папки не открываются.
+                                            onClick = { if (!selecting) openFolderId = folder.id },
+                                            onLongClick = { if (!selecting) folderActionsFor = folder },
                                         )
                                     }
                                 }
@@ -804,8 +961,9 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                                                 null
                                             }
                                         },
-                                        onClick = { openViewer(entry) },
-                                        onLongClick = { actionsFor = entry },
+                                        selected = entry.id in selectedIds,
+                                        onClick = { if (selecting) toggleSelected(entry) else openViewer(entry) },
+                                        onLongClick = { toggleSelected(entry) },
                                     )
                                 }
                             }
@@ -813,12 +971,24 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                     }
                 }
 
-                // Кнопки добавляют в тот раздел, который открыт.
-                Row(
+                if (selecting) {
+                    SelectionBar(
+                        count = selectedEntries.size,
+                        // Папки есть только у фото и видео.
+                        canMove = selectedEntries.all { it.isMedia },
+                        canRestore = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q,
+                        palette = palette,
+                        onArchive = { askArchive = true },
+                        onMove = { moveTargets = selectedEntries },
+                        onRestore = { askBulkRestore = true },
+                        onDelete = { askBulkDelete = true },
+                    )
+                } else Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(8.dp),
                 ) {
+                    // Кнопки добавляют в тот раздел, который открыт.
                     if (section == Section.MEDIA) {
                         PrimaryButton(
                             text = stringResource(R.string.vault_add_media),
@@ -882,7 +1052,7 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
         }
 
         val current = flow
-        if (current is VaultFlow.Importing || current is VaultFlow.Restoring) {
+        if (current is VaultFlow.Importing || current is VaultFlow.Restoring || current is VaultFlow.Exporting) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -896,6 +1066,12 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                     Text(
                         text = if (current is VaultFlow.Importing) {
                             stringResource(R.string.import_progress, current.done, current.total)
+                        } else if (current is VaultFlow.Exporting) {
+                            stringResource(
+                                R.string.archive_progress,
+                                (current.done + 1).coerceAtMost(current.total),
+                                current.total,
+                            )
                         } else if (current is VaultFlow.Restoring && current.total > 1) {
                             stringResource(
                                 R.string.restore_progress_many,
@@ -939,7 +1115,7 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
                     if (acting.isMedia) {
                         DialogAction(text = stringResource(R.string.entry_move), color = palette.opBg) {
                             actionsFor = null
-                            movingEntry = acting
+                            moveTargets = listOf(acting)
                         }
                     }
                     DialogAction(text = stringResource(R.string.vault_delete_confirm), color = palette.error) {
@@ -1083,22 +1259,91 @@ private fun VaultContent(app: CalcApp, session: VaultSession, onLock: () -> Unit
 
     // --- Папки ---
 
-    val moving = movingEntry
+    val moving = moveTargets
     if (moving != null) {
         MoveDialog(
-            entry = moving,
+            // Все переносимые файлы лежат в одном месте — там, где их выбрали.
+            currentFolderId = moving.firstOrNull()?.folderId,
             folders = folders,
             palette = palette,
             onMove = { target ->
-                movingEntry = null
-                moveEntry(moving, target)
+                moveTargets = null
+                moveEntries(moving, target)
             },
             onNewFolder = {
-                movingEntry = null
+                moveTargets = null
                 moveAfterCreate = moving
                 creatingFolder = true
             },
-            onDismiss = { movingEntry = null },
+            onDismiss = { moveTargets = null },
+        )
+    }
+
+    // --- Выбранные файлы ---
+
+    if (askArchive) {
+        val files = selectedEntries
+        AlertDialog(
+            onDismissRequest = { askArchive = false },
+            title = { Text(text = stringResource(R.string.archive_confirm_title)) },
+            text = { Text(text = stringResource(R.string.archive_confirm_text, files.size)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    askArchive = false
+                    chooseArchivePlace(files)
+                }) {
+                    Text(text = stringResource(R.string.archive_choose_place), color = palette.opBg)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { askArchive = false }) {
+                    Text(text = stringResource(R.string.dialog_cancel))
+                }
+            },
+        )
+    }
+
+    if (askBulkRestore) {
+        val files = selectedEntries
+        AlertDialog(
+            onDismissRequest = { askBulkRestore = false },
+            title = { Text(text = stringResource(R.string.bulk_restore_title, files.size)) },
+            text = { Text(text = stringResource(R.string.bulk_restore_text)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    askBulkRestore = false
+                    restoreMany(files, folder = null)
+                }) {
+                    Text(text = stringResource(R.string.entry_restore), color = palette.opBg)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { askBulkRestore = false }) {
+                    Text(text = stringResource(R.string.dialog_cancel))
+                }
+            },
+        )
+    }
+
+    if (askBulkDelete) {
+        val files = selectedEntries
+        AlertDialog(
+            onDismissRequest = { askBulkDelete = false },
+            title = { Text(text = stringResource(R.string.bulk_delete_title, files.size)) },
+            text = { Text(text = stringResource(R.string.bulk_delete_text)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    askBulkDelete = false
+                    deleteMany(files)
+                }) {
+                    Text(text = stringResource(R.string.vault_delete_confirm), color = palette.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { askBulkDelete = false }) {
+                    Text(text = stringResource(R.string.dialog_cancel))
+                }
+            },
         )
     }
 
@@ -1270,6 +1515,7 @@ private fun FileRow(
     palette: CalcPalette,
     cache: LruCache<String, ImageBitmap>,
     loadThumbnail: () -> ByteArray?,
+    selected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
@@ -1294,6 +1540,7 @@ private fun FileRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) palette.opBg.copy(alpha = 0.18f) else Color.Transparent)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1306,10 +1553,10 @@ private fun FileRow(
             contentAlignment = Alignment.Center,
         ) {
             val bmp = bitmap
-            if (bmp != null) {
-                Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            } else {
-                Text(
+            when {
+                selected -> SelectedMark(palette)
+                bmp != null -> Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                else -> Text(
                     text = extensionLabel(entry),
                     color = palette.opBg,
                     fontSize = 12.sp,
@@ -1378,6 +1625,7 @@ private fun VaultCell(
     cache: LruCache<String, ImageBitmap>,
     compact: Boolean,
     loadThumbnail: () -> ByteArray?,
+    selected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
@@ -1462,7 +1710,92 @@ private fun VaultCell(
                     .padding(horizontal = 4.dp),
             )
         }
+        if (selected) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x55000000))
+                    .border(3.dp, palette.opBg),
+            )
+            SelectedMark(
+                palette,
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp),
+            )
+        }
     }
+}
+
+/** Синий кружок с галочкой на отмеченном файле. */
+@Composable
+private fun SelectedMark(palette: CalcPalette, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(24.dp)
+            .clip(CircleShape)
+            .background(palette.opBg),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text = "✓", color = palette.opText, fontSize = 15.sp)
+    }
+}
+
+/**
+ * Нижняя панель в режиме выделения: крупная «Сохранить в архив» и под ней
+ * «Переместить», «Восстановить», «Удалить».
+ */
+@Composable
+private fun SelectionBar(
+    count: Int,
+    canMove: Boolean,
+    canRestore: Boolean,
+    palette: CalcPalette,
+    onArchive: () -> Unit,
+    onMove: () -> Unit,
+    onRestore: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        PrimaryButton(
+            text = stringResource(R.string.action_archive, count),
+            palette = palette,
+            enabled = count > 0,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onArchive,
+        )
+        Row(modifier = Modifier.fillMaxWidth()) {
+            if (canMove) {
+                SelectionAction(stringResource(R.string.entry_move), palette.opBg, count > 0, onMove)
+            }
+            if (canRestore) {
+                SelectionAction(stringResource(R.string.entry_restore), palette.opBg, count > 0, onRestore)
+            }
+            SelectionAction(stringResource(R.string.vault_delete_confirm), palette.error, count > 0, onDelete)
+        }
+    }
+}
+
+@Composable
+private fun RowScope.SelectionAction(text: String, color: Color, enabled: Boolean, onClick: () -> Unit) {
+    Text(
+        text = text,
+        color = if (enabled) color else color.copy(alpha = 0.4f),
+        fontSize = 15.sp,
+        fontWeight = FontWeight.Medium,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 12.dp),
+    )
 }
 
 /** "отчёт.pdf" → "PDF"; без расширения — по типу. */

@@ -48,7 +48,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.widget.doAfterTextChanged
 import com.pocketcalc.calculator.R
 import com.pocketcalc.calculator.ui.theme.CalcPalette
-import com.pocketcalc.calculator.vault.VaultEntry
 import com.pocketcalc.calculator.vault.VaultFolder
 
 /** Подпись «Папки» над списком папок (под фото и видео). */
@@ -242,12 +241,12 @@ private class PrivateEditText(context: Context) : EditText(context) {
 }
 
 /**
- * «Переместить в…»: общая сетка (если файл сейчас в папке), другие папки
- * и «+ Новая папка».
+ * «Переместить в…»: общая сетка (если файлы сейчас в папке
+ * [currentFolderId]), другие папки и «+ Новая папка».
  */
 @Composable
 internal fun MoveDialog(
-    entry: VaultEntry,
+    currentFolderId: String?,
     folders: List<VaultFolder>,
     palette: CalcPalette,
     onMove: (VaultFolder?) -> Unit,
@@ -264,13 +263,13 @@ internal fun MoveDialog(
                     .heightIn(max = 420.dp)
                     .verticalScroll(rememberScrollState()),
             ) {
-                if (entry.folderId != null) {
+                if (currentFolderId != null) {
                     MoveTarget(text = stringResource(R.string.move_to_main), palette = palette, showIcon = false) {
                         onMove(null)
                     }
                 }
                 for (folder in folders) {
-                    if (folder.id != entry.folderId) {
+                    if (folder.id != currentFolderId) {
                         MoveTarget(text = folder.name, palette = palette, showIcon = true) { onMove(folder) }
                     }
                 }

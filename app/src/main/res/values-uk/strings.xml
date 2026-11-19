@@ -8,11 +8,11 @@
 
     <!-- Первинне налаштування -->
     <string name="setup_pin_title">Придумайте PIN-код</string>
-    <string name="setup_pin_hint">8–12 цифр, не з нуля. Його ви набиратимете в калькуляторі й натискатимете «=».</string>
+    <string name="setup_pin_hint">4–12 цифр, не з нуля. Його ви будете набирати в калькуляторі й натискати «=». Не беріть рік чи дату народження: їх вгадують першими.</string>
     <string name="setup_pin_confirm_title">Повторіть PIN-код</string>
     <string name="setup_next">Далі</string>
     <string name="setup_back">Назад</string>
-    <string name="pin_err_too_short">Потрібно не менше 8 цифр</string>
+    <string name="pin_err_too_short">Потрібно щонайменше 4 цифри</string>
     <string name="pin_err_too_long">Не більше 12 цифр</string>
     <string name="pin_err_leading_zero">PIN не може починатися з 0 — калькулятор не дає набрати нуль на початку числа</string>
     <string name="pin_err_all_same">Занадто простий PIN: усі цифри однакові</string>
@@ -169,4 +169,26 @@
     <string name="folder_restore_text">Усі файли з неї (%1$d) повернуться до Галереї — кожен туди, звідки був доданий, — і зникнуть зі сховища. Порожня папка видалиться.</string>
     <string name="folder_restored">Повернуто до Галереї: %1$d. Папку видалено.</string>
     <string name="folder_restored_partly">Повернуто до Галереї: %1$d з %2$d. Решта файлів залишилася в папці.</string>
+
+    <!-- Выделение, архив, защита от подбора PIN -->
+    <string name="pin_err_common">Надто простий PIN: такі вгадують одними з перших</string>
+    <string name="wrong_pin_attempts">Хибних спроб PIN від минулого входу: %1$d</string>
+    <string name="selection_count">Вибрано: %1$d</string>
+    <string name="select_all">Вибрати всі</string>
+    <string name="select_none">Зняти всі</string>
+    <string name="action_archive">Зберегти в архів (%1$d)</string>
+    <string name="archive_confirm_title">Зберегти в архів?</string>
+    <string name="archive_confirm_text">Файли (%1$d) збережуться одним ZIP-архівом БЕЗ шифрування: відкрити його зможе будь-хто, у кого він опиниться. Перенесіть архів куди потрібно й видаліть його з телефона. У сховищі файли залишаться.</string>
+    <string name="archive_choose_place">Вибрати, куди зберегти</string>
+    <string name="archive_progress">Зберігаю в архів %1$d з %2$d…</string>
+    <string name="archive_saved">Архів збережено, файлів: %1$d. Усередині вони не зашифровані — перенесіть архів і видаліть його з телефона.</string>
+    <string name="archive_failed">Не вдалося зберегти архів. Недописаний архів видалено — спробуйте ще раз.</string>
+    <string name="archive_file_prefix">Архів</string>
+    <string name="bulk_delete_title">Видалити файли (%1$d)?</string>
+    <string name="bulk_delete_text">Їх буде видалено зі сховища назавжди. Повернути їх буде неможливо.</string>
+    <string name="bulk_deleted">Видалено: %1$d</string>
+    <string name="bulk_restore_title">Відновити файли (%1$d)?</string>
+    <string name="bulk_restore_text">Кожен файл повернеться до Галереї туди, звідки був доданий, і зникне зі сховища.</string>
+    <string name="bulk_restored">Повернуто до Галереї: %1$d</string>
+    <string name="bulk_restored_partly">Повернуто до Галереї: %1$d з %2$d. Решта залишилася у сховищі.</string>
 </resources>

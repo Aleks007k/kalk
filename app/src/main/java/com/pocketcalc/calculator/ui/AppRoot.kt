@@ -1,9 +1,12 @@
 package com.pocketcalc.calculator.ui
 
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import com.pocketcalc.calculator.CalcApp
+import com.pocketcalc.calculator.R
 import com.pocketcalc.calculator.vault.SecretCandidate
 import com.pocketcalc.calculator.vault.SecretInput
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +19,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun AppRoot(app: CalcApp) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val unlockMutex = remember { Mutex() }
 
     // Вызывается калькулятором при каждом «=». Если набранное похоже на PIN или
@@ -26,6 +30,9 @@ fun AppRoot(app: CalcApp) {
         if (candidate != null) {
             scope.launch {
                 unlockMutex.withLock {
+                    val isPin = candidate is SecretCandidate.Pin
+                    // После нескольких неверных PIN — тихая пауза: попытку просто не проверяем.
+                    if (isPin && !app.attemptGuard.tryBeginCheck()) return@withLock
                     val session = withContext(Dispatchers.Default) {
                         val digits = when (candidate) {
                             is SecretCandidate.Pin -> candidate.digits
@@ -46,6 +53,19 @@ fun AppRoot(app: CalcApp) {
                             session,
                             viaRecovery = candidate is SecretCandidate.Recovery,
                         )
+                        // Тайник открылся — обнуляем счётчик и говорим владельцу о чужих попытках.
+                        if (AppController.session === session) {
+                            val wrong = app.attemptGuard.onSuccess()
+                            if (wrong > 0 && AppController.screen == Screen.VAULT) {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.wrong_pin_attempts, wrong),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                    } else if (isPin) {
+                        app.attemptGuard.onFailure()
                     }
                 }
             }

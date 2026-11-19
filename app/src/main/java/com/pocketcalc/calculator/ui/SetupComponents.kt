@@ -171,6 +171,7 @@ fun PinCreator(
     val errLeadingZero = stringResource(R.string.pin_err_leading_zero)
     val errAllSame = stringResource(R.string.pin_err_all_same)
     val errSequence = stringResource(R.string.pin_err_sequence)
+    val errCommon = stringResource(R.string.pin_err_common)
     val errMismatch = stringResource(R.string.pin_err_mismatch)
 
     fun problemText(p: PinProblem): String = when (p) {
@@ -179,6 +180,7 @@ fun PinCreator(
         PinProblem.LEADING_ZERO -> errLeadingZero
         PinProblem.ALL_SAME -> errAllSame
         PinProblem.SEQUENCE -> errSequence
+        PinProblem.TOO_COMMON -> errCommon
     }
 
     StepLayout(

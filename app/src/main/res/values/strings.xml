@@ -8,11 +8,11 @@
 
     <!-- Первичная настройка -->
     <string name="setup_pin_title">Create a PIN</string>
-    <string name="setup_pin_hint">8–12 digits, not starting with 0. You will type it in the calculator and press “=”.</string>
+    <string name="setup_pin_hint">4–12 digits, not starting with 0. You will type it in the calculator and press “=”. Avoid years and birthdays: they are guessed first.</string>
     <string name="setup_pin_confirm_title">Repeat the PIN</string>
     <string name="setup_next">Next</string>
     <string name="setup_back">Back</string>
-    <string name="pin_err_too_short">At least 8 digits</string>
+    <string name="pin_err_too_short">At least 4 digits</string>
     <string name="pin_err_too_long">No more than 12 digits</string>
     <string name="pin_err_leading_zero">The PIN can\'t start with 0 — a calculator ignores a leading zero</string>
     <string name="pin_err_all_same">Too simple: all digits are the same</string>
@@ -169,4 +169,26 @@
     <string name="folder_restore_text">All its files (%1$d) go back to the Gallery — each to where it was added from — and leave the vault. The empty folder is then deleted.</string>
     <string name="folder_restored">Restored to the Gallery: %1$d. Folder deleted.</string>
     <string name="folder_restored_partly">Restored to the Gallery: %1$d of %2$d. The other files stayed in the folder.</string>
+
+    <!-- Selection, archive, PIN guessing guard -->
+    <string name="pin_err_common">Too simple: PINs like this are guessed first</string>
+    <string name="wrong_pin_attempts">Wrong PIN attempts since last time: %1$d</string>
+    <string name="selection_count">Selected: %1$d</string>
+    <string name="select_all">Select all</string>
+    <string name="select_none">Deselect all</string>
+    <string name="action_archive">Save to archive (%1$d)</string>
+    <string name="archive_confirm_title">Save to an archive?</string>
+    <string name="archive_confirm_text">The files (%1$d) will be saved as one ZIP archive WITHOUT encryption: anyone who gets it can open it. Move the archive where you need it and delete it from the phone. The files stay in the vault.</string>
+    <string name="archive_choose_place">Choose where to save</string>
+    <string name="archive_progress">Saving to archive %1$d of %2$d…</string>
+    <string name="archive_saved">Archive saved, files: %1$d. They are not encrypted inside — move the archive and delete it from the phone.</string>
+    <string name="archive_failed">Could not save the archive. The unfinished archive was deleted — please try again.</string>
+    <string name="archive_file_prefix">Archive</string>
+    <string name="bulk_delete_title">Delete %1$d files?</string>
+    <string name="bulk_delete_text">They will be deleted from the vault forever. This cannot be undone.</string>
+    <string name="bulk_deleted">Deleted: %1$d</string>
+    <string name="bulk_restore_title">Restore %1$d files?</string>
+    <string name="bulk_restore_text">Each file goes back to the Gallery, to where it was added from, and leaves the vault.</string>
+    <string name="bulk_restored">Restored to the Gallery: %1$d</string>
+    <string name="bulk_restored_partly">Restored to the Gallery: %1$d of %2$d. The rest stayed in the vault.</string>
 </resources>

@@ -4,7 +4,7 @@ import java.security.SecureRandom
 
 /** Что было набрано на калькуляторе перед «=» — если это похоже на секрет. */
 sealed interface SecretCandidate {
-    /** 8–12 цифр: возможно, PIN. */
+    /** 4–12 цифр: возможно, PIN. */
     data class Pin(val digits: String) : SecretCandidate
 
     /** Ровно 16 цифр: возможно, код восстановления. */
@@ -12,7 +12,7 @@ sealed interface SecretCandidate {
 }
 
 /** Почему PIN не подходит. */
-enum class PinProblem { NOT_DIGITS, TOO_SHORT, TOO_LONG, LEADING_ZERO, ALL_SAME, SEQUENCE }
+enum class PinProblem { NOT_DIGITS, TOO_SHORT, TOO_LONG, LEADING_ZERO, ALL_SAME, SEQUENCE, TOO_COMMON }
 
 /**
  * Правила для PIN и кода восстановления.
@@ -22,7 +22,13 @@ enum class PinProblem { NOT_DIGITS, TOO_SHORT, TOO_LONG, LEADING_ZERO, ALL_SAME,
  */
 object SecretInput {
 
-    const val PIN_MIN = 8
+    /**
+     * С версии 0.12.0 PIN — от 4 цифр (раньше от 8): владелец входит часто.
+     * От подбора руками защищает тихая пауза после неверных попыток
+     * ([AttemptGuard]); от специалиста с доступом к памяти телефона короткий
+     * PIN защищает слабее — это записано в ARCHITECTURE.md.
+     */
+    const val PIN_MIN = 4
     const val PIN_MAX = 12
     const val RECOVERY_LENGTH = 16
 
@@ -47,8 +53,19 @@ object SecretInput {
         pin[0] == '0' -> PinProblem.LEADING_ZERO
         pin.all { it == pin[0] } -> PinProblem.ALL_SAME
         isStraightSequence(pin) -> PinProblem.SEQUENCE
+        pin in COMMON_PINS -> PinProblem.TOO_COMMON
         else -> null
     }
+
+    /**
+     * Самые частые PIN-коды, которые пробуют первыми (по открытым исследованиям
+     * утёкших PIN): повторяющиеся пары, столбец клавиатуры, «круглые» года.
+     * Одинаковые цифры и цифры подряд отсекаются отдельными правилами.
+     */
+    private val COMMON_PINS = setOf(
+        "1212", "1313", "1010", "2020", "1122", "1004", "2000", "2001", "6969", "2580", "1984",
+        "121212", "123123", "112233", "696969", "131313", "101010", "123321", "159753",
+    )
 
     /** 12345678, 98765432 и подобные: каждая цифра на 1 больше (или меньше) предыдущей. */
     private fun isStraightSequence(pin: String): Boolean {

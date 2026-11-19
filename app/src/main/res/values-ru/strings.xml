@@ -8,11 +8,11 @@
 
     <!-- Первичная настройка -->
     <string name="setup_pin_title">Придумайте PIN-код</string>
-    <string name="setup_pin_hint">8–12 цифр, не с нуля. Его вы будете набирать в калькуляторе и нажимать «=».</string>
+    <string name="setup_pin_hint">4–12 цифр, не с нуля. Его вы будете набирать в калькуляторе и нажимать «=». Не берите год или дату рождения: их угадывают первыми.</string>
     <string name="setup_pin_confirm_title">Повторите PIN-код</string>
     <string name="setup_next">Далее</string>
     <string name="setup_back">Назад</string>
-    <string name="pin_err_too_short">Нужно не меньше 8 цифр</string>
+    <string name="pin_err_too_short">Нужно не меньше 4 цифр</string>
     <string name="pin_err_too_long">Не больше 12 цифр</string>
     <string name="pin_err_leading_zero">PIN не может начинаться с 0 — калькулятор не даёт набрать ноль в начале числа</string>
     <string name="pin_err_all_same">Слишком простой PIN: все цифры одинаковые</string>
@@ -169,4 +169,26 @@
     <string name="folder_restore_text">Все файлы из неё (%1$d) вернутся в Галерею — каждый туда, откуда был добавлен, — и исчезнут из тайника. Опустевшая папка удалится.</string>
     <string name="folder_restored">Возвращено в Галерею: %1$d. Папка удалена.</string>
     <string name="folder_restored_partly">Возвращено в Галерею: %1$d из %2$d. Остальные файлы остались в папке.</string>
+
+    <!-- Выделение, архив, защита от подбора PIN -->
+    <string name="pin_err_common">Слишком простой PIN: такие угадывают одними из первых</string>
+    <string name="wrong_pin_attempts">Неверных попыток PIN с прошлого входа: %1$d</string>
+    <string name="selection_count">Выбрано: %1$d</string>
+    <string name="select_all">Выбрать все</string>
+    <string name="select_none">Снять все</string>
+    <string name="action_archive">Сохранить в архив (%1$d)</string>
+    <string name="archive_confirm_title">Сохранить в архив?</string>
+    <string name="archive_confirm_text">Файлы (%1$d) сохранятся одним ZIP-архивом БЕЗ шифрования: открыть его сможет любой, у кого он окажется. Перенесите архив куда нужно и удалите его с телефона. В тайнике файлы останутся.</string>
+    <string name="archive_choose_place">Выбрать, куда сохранить</string>
+    <string name="archive_progress">Сохраняю в архив %1$d из %2$d…</string>
+    <string name="archive_saved">Архив сохранён, файлов: %1$d. Внутри они не зашифрованы — перенесите архив и удалите его с телефона.</string>
+    <string name="archive_failed">Не удалось сохранить архив. Недописанный архив удалён — попробуйте ещё раз.</string>
+    <string name="archive_file_prefix">Архив</string>
+    <string name="bulk_delete_title">Удалить файлы (%1$d)?</string>
+    <string name="bulk_delete_text">Они будут удалены из тайника навсегда. Вернуть их будет невозможно.</string>
+    <string name="bulk_deleted">Удалено: %1$d</string>
+    <string name="bulk_restore_title">Восстановить файлы (%1$d)?</string>
+    <string name="bulk_restore_text">Каждый файл вернётся в Галерею туда, откуда был добавлен, и исчезнет из тайника.</string>
+    <string name="bulk_restored">Возвращено в Галерею: %1$d</string>
+    <string name="bulk_restored_partly">Возвращено в Галерею: %1$d из %2$d. Остальные остались в тайнике.</string>
 </resources>

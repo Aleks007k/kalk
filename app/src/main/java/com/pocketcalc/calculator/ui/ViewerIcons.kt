@@ -139,6 +139,19 @@ internal fun MusicNoteIcon(modifier: Modifier = Modifier, color: Color = Color.W
     }
 }
 
+/** Крестик «закрыть». */
+@Composable
+internal fun CloseIcon(modifier: Modifier = Modifier, color: Color = Color.White) {
+    Canvas(modifier) {
+        val s = size.minDimension
+        val stroke = s * 0.11f
+        val a = s * 0.2f
+        val b = s * 0.8f
+        drawLine(color, Offset(a, a), Offset(b, b), strokeWidth = stroke, cap = StrokeCap.Round)
+        drawLine(color, Offset(b, a), Offset(a, b), strokeWidth = stroke, cap = StrokeCap.Round)
+    }
+}
+
 /** «Играть» (треугольник) или «пауза» (две полосы). */
 @Composable
 internal fun PlayPauseIcon(showPause: Boolean, modifier: Modifier = Modifier, color: Color = Color.White) {

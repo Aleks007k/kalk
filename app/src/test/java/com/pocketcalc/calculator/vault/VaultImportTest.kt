@@ -403,6 +403,30 @@ class VaultImportTest {
         assertEquals(folder.id, index.entries.single().folderId)
     }
 
+    @Test fun manyFilesDeletedAtOnce() {
+        val (repo, s, dir) = newVault()
+        val a = (repo.importFile(s, ByteArrayInputStream(photo(21)), ImportMeta("a.jpg", "image/jpeg"), ByteArray(10)) as ImportResult.Added).entry
+        val b = (repo.importFile(s, ByteArrayInputStream(photo(22)), ImportMeta("b.jpg", "image/jpeg"), null) as ImportResult.Added).entry
+        val c = (repo.importFile(s, ByteArrayInputStream(photo(23)), ImportMeta("c.jpg", "image/jpeg"), null) as ImportResult.Added).entry
+        assertEquals(2, repo.deleteEntries(s, listOf(a.id, b.id, "нет такого")))
+        assertEquals(listOf(c.id), repo.loadIndex(s)!!.entries.map { it.id })
+        // Остались только файл c (миниатюры у него нет).
+        assertEquals(1, blobCount(dir))
+        assertEquals(0, repo.deleteEntries(s, listOf("нет такого")))
+    }
+
+    @Test fun manyFilesMovedAtOnce() {
+        val (repo, s, _) = newVault()
+        val folder = repo.createFolder(s, "Отпуск")
+        val a = (repo.importFile(s, ByteArrayInputStream(photo(31)), ImportMeta("a.jpg", "image/jpeg"), null) as ImportResult.Added).entry
+        val b = (repo.importFile(s, ByteArrayInputStream(photo(32)), ImportMeta("b.jpg", "image/jpeg"), null) as ImportResult.Added).entry
+        assertEquals(2, repo.moveEntries(s, listOf(a.id, b.id), folder.id))
+        assertTrue(repo.loadIndex(s)!!.entries.all { it.folderId == folder.id })
+        assertEquals(0, repo.moveEntries(s, listOf(a.id), "нет такой"))
+        assertEquals(1, repo.moveEntries(s, listOf(a.id), null))
+        assertNull(repo.loadIndex(s)!!.find(a.id)!!.folderId)
+    }
+
     @Test fun importWithoutDedupeCreatesNewEntry() {
         val (repo, s, _) = newVault()
         val empty = ByteArray(0)
